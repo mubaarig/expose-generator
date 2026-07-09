@@ -12,10 +12,10 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
-  const supabase = createServerClient(
-    env.url,
-    env.anonKey,
-    {
+  let user = null;
+
+  try {
+    const supabase = createServerClient(env.url, env.anonKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -30,14 +30,18 @@ export async function updateSession(request: NextRequest) {
           );
         },
       },
-    },
-  );
+    });
 
-  // WICHTIG: getUser() unmittelbar nach dem Client-Erstellen aufrufen —
-  // sonst können User zufällig ausgeloggt werden (Supabase-SSR-Empfehlung).
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    // WICHTIG: getUser() unmittelbar nach dem Client-Erstellen aufrufen —
+    // sonst können User zufällig ausgeloggt werden (Supabase-SSR-Empfehlung).
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
+    user = authUser;
+  } catch (err) {
+    console.error("Supabase proxy setup failed:", err);
+    return supabaseResponse;
+  }
 
   const path = request.nextUrl.pathname;
   const isProtected = path.startsWith("/dashboard");
