@@ -4,6 +4,17 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+const AUTH_TIMEOUT_MS = 12_000;
+
+function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error(message)), AUTH_TIMEOUT_MS);
+    }),
+  ]);
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -19,25 +30,34 @@ export default function LoginPage() {
     setStatus("sending");
     setError(null);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-    if (error) {
-      const isRateLimit = error.message.toLowerCase().includes("rate limit");
-      if (isRateLimit) setShowPasswordLogin(true);
-      setError(
-        isRateLimit
-          ? "Supabase hat gerade zu viele Magic-Link-E-Mails blockiert. Nutze den Passwort-Login unten oder warte kurz."
-          : error.message,
+    try {
+      const supabase = createClient();
+      const { error } = await withTimeout(
+        supabase.auth.signInWithOtp({
+          email,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
+        }),
+        "Supabase antwortet gerade zu langsam. Nutze den Passwort-Login unten oder versuche es später erneut.",
       );
+
+      if (error) {
+        const isRateLimit = error.message.toLowerCase().includes("rate limit");
+        if (isRateLimit) setShowPasswordLogin(true);
+        setError(
+          isRateLimit
+            ? "Supabase hat gerade zu viele Magic-Link-E-Mails blockiert. Nutze den Passwort-Login unten oder warte kurz."
+            : error.message,
+        );
+        setStatus("error");
+      } else {
+        setStatus("sent");
+      }
+    } catch (err) {
+      setShowPasswordLogin(true);
+      setError(err instanceof Error ? err.message : "Auth-Anfrage fehlgeschlagen.");
       setStatus("error");
-    } else {
-      setStatus("sent");
     }
   }
 
@@ -45,11 +65,22 @@ export default function LoginPage() {
     setStatus("sending");
     setError(null);
 
-    const supabase = createClient();
-    const { data, error } =
-      mode === "login"
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
+    let result;
+    try {
+      const supabase = createClient();
+      result = await withTimeout(
+        mode === "login"
+          ? supabase.auth.signInWithPassword({ email, password })
+          : supabase.auth.signUp({ email, password }),
+        "Supabase antwortet gerade zu langsam. Bitte in ein paar Sekunden erneut versuchen.",
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Auth-Anfrage fehlgeschlagen.");
+      setStatus("error");
+      return;
+    }
+
+    const { data, error } = result;
 
     if (error) {
       const isRateLimit = error.message.toLowerCase().includes("rate limit");
@@ -114,7 +145,11 @@ export default function LoginPage() {
           <div className="border-t border-zinc-200 pt-5 dark:border-zinc-800">
             <button
               type="button"
-              onClick={() => setShowPasswordLogin((v) => !v)}
+              onClick={() => {
+                setStatus("idle");
+                setError(null);
+                setShowPasswordLogin((v) => !v);
+              }}
               className="text-sm font-medium text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-zinc-100"
             >
               {showPasswordLogin
