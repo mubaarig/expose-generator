@@ -15,5 +15,9 @@ export function getSupabaseEnv() {
     return null;
   }
 
+  if (/[\r\n]/.test(anonKey)) {
+    return null;
+  }
+
   return { url, anonKey };
 }
