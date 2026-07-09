@@ -94,3 +94,16 @@ alter table public.documents enable row level security;
 drop policy if exists "documents_all_own" on public.documents;
 create policy "documents_all_own" on public.documents
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------------
+-- Grants
+-- ---------------------------------------------------------------------------
+-- RLS steuert, WELCHE Zeilen sichtbar sind — die Rolle braucht zusätzlich die
+-- Tabellen-Grants, um überhaupt zugreifen zu dürfen. Eingeloggte Nutzer laufen
+-- über die Rolle `authenticated`; `anon` bleibt außen vor (RLS + kein Grant).
+-- Normalerweise setzt Supabase diese Grants automatisch — hier explizit,
+-- damit das Schema eigenständig reproduzierbar ist.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete
+  on public.profiles, public.properties, public.documents
+  to authenticated;

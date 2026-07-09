@@ -67,7 +67,7 @@ Route Handler ──(ANTHROPIC_API_KEY)──► Claude API
    (serverseitig, auth-guarded)
 ```
 
-- **Auth:** Supabase Magic Link (kein Passwort). Session-Refresh + Routenschutz in [`middleware.ts`](middleware.ts) → [`src/lib/supabase/middleware.ts`](src/lib/supabase/middleware.ts).
+- **Auth:** Supabase Magic Link (kein Passwort). Session-Refresh + Routenschutz in [`src/proxy.ts`](src/proxy.ts) → [`src/lib/supabase/middleware.ts`](src/lib/supabase/middleware.ts).
 - **Datenzugriff:** Lesen/Schreiben von `properties`/`documents` direkt über den Browser-Client — abgesichert durch RLS.
 - **Generierung:** [`src/lib/anthropic.ts`](src/lib/anthropic.ts) kapselt Modell, System-Prompt-Vertrag und Prompt-Bau pro Abschnitt.
 

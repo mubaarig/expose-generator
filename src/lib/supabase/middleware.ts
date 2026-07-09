@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Hält die Auth-Session frisch (Token-Refresh) und schützt App-Routen.
-// Wird aus der Root-middleware.ts bei jedem Request aufgerufen.
+// Wird aus src/proxy.ts bei jedem passenden Request aufgerufen.
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 

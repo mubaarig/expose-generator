@@ -147,7 +147,7 @@ export default function Generator() {
   return (
     <div className="grid gap-8 lg:grid-cols-[22rem_1fr]">
       {/* Eingabeformular */}
-      <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
           Eckdaten
         </h2>
@@ -243,7 +243,7 @@ export default function Generator() {
           return (
             <section
               key={key}
-              className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
+              className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -267,6 +267,11 @@ export default function Generator() {
                   <span className="text-zinc-400">Noch nicht generiert.</span>
                 ) : st.status === "error" ? (
                   <span className="text-red-600">{st.text}</span>
+                ) : st.status === "streaming" && !st.text ? (
+                  <div className="flex items-center gap-2 text-zinc-500">
+                    <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-zinc-400" />
+                    <span>Generiere…</span>
+                  </div>
                 ) : (
                   <p className="whitespace-pre-wrap">
                     {st.text}
