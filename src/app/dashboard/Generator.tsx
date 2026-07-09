@@ -24,6 +24,23 @@ const emptyForm: PropertyInput = {
   notes: "",
 };
 
+const demoForm: PropertyInput = {
+  address: "Marzstraße 109/8, 1150 Wien",
+  size_sqm: 43,
+  rooms: 1,
+  year_built: 1918,
+  condition: "renoviert",
+  notes: "Süd-Balkon, EBK 2021, U3-Nähe, ruhige Seitenstraße",
+};
+
+const CONDITION_OPTIONS = [
+  "neuwertig",
+  "renoviert",
+  "gepflegt",
+  "teilsaniert",
+  "renovierungsbedürftig",
+] as const;
+
 const emptySections = (): Record<SectionKey, SectionState> =>
   Object.fromEntries(
     SECTION_KEYS.map((k) => [k, { text: "", status: "empty" }]),
@@ -35,6 +52,7 @@ export default function Generator() {
   const [sections, setSections] =
     useState<Record<SectionKey, SectionState>>(emptySections);
   const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
   function num(v: string): number | null {
@@ -97,67 +115,94 @@ export default function Generator() {
 
   const hasContent = SECTION_KEYS.some((k) => sections[k].status === "done");
 
+  function loadDemo() {
+    setForm(demoForm);
+    setSections(emptySections());
+    setSaveMsg(null);
+  }
+
   // Property + Dokument in Supabase speichern (RLS erzwingt Eigentum).
   async function save() {
+    if (saving) return;
+    setSaving(true);
     setSaveMsg(null);
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setSaveMsg("Nicht eingeloggt.");
-      return;
+
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setSaveMsg("Nicht eingeloggt.");
+        return;
+      }
+
+      const { data: property, error: pErr } = await supabase
+        .from("properties")
+        .insert({ ...form, user_id: user.id })
+        .select()
+        .single();
+
+      if (pErr || !property) {
+        setSaveMsg(`Fehler beim Speichern: ${pErr?.message}`);
+        return;
+      }
+
+      const content = Object.fromEntries(
+        SECTION_KEYS.filter((k) => sections[k].status === "done").map((k) => [
+          k,
+          sections[k].text,
+        ]),
+      );
+
+      const { error: dErr } = await supabase.from("documents").insert({
+        property_id: property.id,
+        user_id: user.id,
+        content,
+        model: "claude-opus-4-8",
+        prompt_version: "expose-v2",
+      });
+
+      if (dErr) {
+        setSaveMsg(`Fehler beim Speichern: ${dErr.message}`);
+        return;
+      }
+
+      setSaveMsg("Exposé wurde gespeichert.");
+      router.refresh();
+    } catch (err) {
+      setSaveMsg(
+        err instanceof Error ? `Fehler beim Speichern: ${err.message}` : "Fehler beim Speichern.",
+      );
+    } finally {
+      setSaving(false);
     }
-
-    const { data: property, error: pErr } = await supabase
-      .from("properties")
-      .insert({ ...form, user_id: user.id })
-      .select()
-      .single();
-
-    if (pErr || !property) {
-      setSaveMsg(`Fehler beim Speichern: ${pErr?.message}`);
-      return;
-    }
-
-    const content = Object.fromEntries(
-      SECTION_KEYS.filter((k) => sections[k].status === "done").map((k) => [
-        k,
-        sections[k].text,
-      ]),
-    );
-
-    const { error: dErr } = await supabase.from("documents").insert({
-      property_id: property.id,
-      user_id: user.id,
-      content,
-      model: "claude-opus-4-8",
-      prompt_version: "expose-v1",
-    });
-
-    if (dErr) {
-      setSaveMsg(`Fehler beim Speichern: ${dErr.message}`);
-      return;
-    }
-
-    setSaveMsg("Gespeichert ✓");
-    router.refresh();
   }
 
   return (
     <div className="grid gap-8 lg:grid-cols-[22rem_1fr]">
       {/* Eingabeformular */}
       <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          Eckdaten
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            Eckdaten
+          </h2>
+          <button
+            type="button"
+            onClick={loadDemo}
+            disabled={busy || saving}
+            className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            Demo laden
+          </button>
+        </div>
         <div className="mt-4 flex flex-col gap-3">
           <Field label="Adresse *">
             <input
               className={inputCls}
               value={form.address}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
-              placeholder="Musterstraße 1, 10115 Berlin"
+              placeholder="Marzstraße 109/8, 1150 Wien"
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
@@ -194,14 +239,20 @@ export default function Generator() {
               />
             </Field>
             <Field label="Zustand">
-              <input
+              <select
                 className={inputCls}
                 value={form.condition ?? ""}
                 onChange={(e) =>
                   setForm({ ...form, condition: e.target.value })
                 }
-                placeholder="neuwertig"
-              />
+              >
+                <option value="">Bitte wählen</option>
+                {CONDITION_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
             </Field>
           </div>
           <Field label="Notizen">
@@ -209,7 +260,7 @@ export default function Generator() {
               className={`${inputCls} min-h-20 resize-y`}
               value={form.notes ?? ""}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder="Süd-Balkon, EBK 2021, ruhige Seitenstraße…"
+              placeholder="Süd-Balkon, EBK 2021, U3-Nähe, ruhige Seitenstraße…"
             />
           </Field>
 
@@ -224,14 +275,22 @@ export default function Generator() {
           {hasContent && (
             <button
               onClick={save}
-              disabled={busy}
+              disabled={busy || saving}
               className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
             >
-              Speichern
+              {saving ? "Speichere…" : "Exposé speichern"}
             </button>
           )}
           {saveMsg && (
-            <p className="text-sm text-zinc-500">{saveMsg}</p>
+            <p
+              className={`text-sm ${
+                saveMsg.startsWith("Fehler") || saveMsg === "Nicht eingeloggt."
+                  ? "text-red-600"
+                  : "text-emerald-600"
+              }`}
+            >
+              {saveMsg}
+            </p>
           )}
         </div>
       </div>

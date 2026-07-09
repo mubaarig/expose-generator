@@ -7,7 +7,7 @@ export const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-opus-4-8";
 
 // Versioniert, damit gespeicherte Dokumente nachvollziehbar bleiben, wenn
 // wir das Prompt weiterentwickeln (steht in documents.prompt_version).
-export const PROMPT_VERSION = "expose-v1";
+export const PROMPT_VERSION = "expose-v2";
 
 export const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -18,7 +18,8 @@ const SYSTEM_PROMPT = `Du bist ein erfahrener Immobilienmakler und textest profe
 
 Regeln:
 - Schreibe sachlich-ansprechend, in vollständigen Sätzen, ohne Übertreibungen oder Superlative-Gewitter.
-- Erfinde keine Fakten. Nutze nur die gegebenen Eckdaten; wo Informationen fehlen, formuliere allgemein statt zu spekulieren.
+- Erfinde keine Fakten. Nutze nur die gegebenen Eckdaten; wo Informationen fehlen, benenne das knapp oder formuliere allgemein statt zu spekulieren.
+- Bewahre Eigennamen, Adressen und Straßennamen exakt wie eingegeben.
 - Keine Anrede, keine Überschrift, keine Aufzählungszeichen — nur der Fließtext des angefragten Abschnitts.
 - 2 bis 4 Sätze pro Abschnitt.
 - Gib ausschließlich den Abschnittstext aus, ohne Vor- oder Nachspann.`;
