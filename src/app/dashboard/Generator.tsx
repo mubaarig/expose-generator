@@ -48,12 +48,15 @@ const emptySections = (): Record<SectionKey, SectionState> =>
 
 export default function Generator() {
   const router = useRouter();
-  const [form, setForm] = useState<PropertyInput>(emptyForm);
+  // Vorbefülltes Beispiel: Besucher sehen sofort ausgefüllte Felder und können
+  // direkt „Exposé generieren" klicken.
+  const [form, setForm] = useState<PropertyInput>(demoForm);
   const [sections, setSections] =
     useState<Record<SectionKey, SectionState>>(emptySections);
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   function num(v: string): number | null {
     if (v.trim() === "") return null;
@@ -115,10 +118,52 @@ export default function Generator() {
 
   const hasContent = SECTION_KEYS.some((k) => sections[k].status === "done");
 
-  function loadDemo() {
-    setForm(demoForm);
+  function resetForm() {
+    setForm(emptyForm);
     setSections(emptySections());
     setSaveMsg(null);
+  }
+
+  // Fertige Abschnitte als sauber formatierter Text.
+  function exposeText(): string {
+    const body = SECTIONS.filter((s) => sections[s.key].status === "done")
+      .map((s) => `${s.title.toUpperCase()}\n${sections[s.key].text}`)
+      .join("\n\n");
+    return `EXPOSÉ – ${form.address}\n\n${body}`;
+  }
+
+  async function copyAll() {
+    try {
+      await navigator.clipboard.writeText(exposeText());
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setSaveMsg("Fehler: Kopieren nicht möglich.");
+    }
+  }
+
+  // Druckansicht in neuem Fenster → Browser-„Als PDF speichern".
+  function exportPdf() {
+    const win = window.open("", "_blank", "width=800,height=1000");
+    if (!win) return;
+    const esc = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const blocks = SECTIONS.filter((s) => sections[s.key].status === "done")
+      .map(
+        (s) =>
+          `<h2>${esc(s.title)}</h2><p>${esc(sections[s.key].text).replace(/\n/g, "<br>")}</p>`,
+      )
+      .join("");
+    win.document.write(
+      `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Exposé – ${esc(
+        form.address,
+      )}</title><style>body{font-family:system-ui,-apple-system,sans-serif;max-width:640px;margin:48px auto;padding:0 24px;color:#18181b;line-height:1.6}h1{font-size:22px;margin:0 0 4px}.meta{color:#71717a;font-size:13px;margin:0 0 28px}h2{font-size:15px;margin:24px 0 6px;text-transform:uppercase;letter-spacing:.04em;color:#3f3f46}p{margin:0}</style></head><body><h1>Exposé</h1><p class="meta">${esc(
+        form.address,
+      )}</p>${blocks}</body></html>`,
+    );
+    win.document.close();
+    win.focus();
+    win.print();
   }
 
   // Property + Dokument in Supabase speichern (RLS erzwingt Eigentum).
@@ -189,11 +234,11 @@ export default function Generator() {
           </h2>
           <button
             type="button"
-            onClick={loadDemo}
+            onClick={resetForm}
             disabled={busy || saving}
             className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
           >
-            Demo laden
+            Felder leeren
           </button>
         </div>
         <div className="mt-4 flex flex-col gap-3">
@@ -297,6 +342,26 @@ export default function Generator() {
 
       {/* Abschnitte */}
       <div className="flex flex-col gap-4">
+        {hasContent && (
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={copyAll}
+              disabled={busy}
+              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              {copied ? "Kopiert ✓" : "Text kopieren"}
+            </button>
+            <button
+              type="button"
+              onClick={exportPdf}
+              disabled={busy}
+              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              Als PDF
+            </button>
+          </div>
+        )}
         {SECTIONS.map(({ key, title, hint }) => {
           const st = sections[key];
           return (

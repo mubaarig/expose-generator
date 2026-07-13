@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import DemoButton from "@/components/DemoButton";
 
 const AUTH_TIMEOUT_MS = 12_000;
 
@@ -152,6 +153,18 @@ function LoginForm() {
         </div>
       ) : (
         <div className="mt-8 flex flex-col gap-5">
+          <div className="flex flex-col gap-3">
+            <DemoButton
+              className="[&>button]:w-full"
+              label="Demo ansehen — ohne Anmeldung"
+            />
+            <div className="flex items-center gap-3 text-xs text-zinc-400">
+              <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+              oder
+              <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+            </div>
+          </div>
+
           <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-3">
             <input
               type="email"

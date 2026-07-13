@@ -35,9 +35,15 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <span className="hidden text-sm text-zinc-500 sm:inline">
-            {user?.email}
-          </span>
+          {user?.is_anonymous ? (
+            <span className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400">
+              Demo-Modus
+            </span>
+          ) : (
+            <span className="hidden text-sm text-zinc-500 sm:inline">
+              {user?.email}
+            </span>
+          )}
           <form action="/auth/signout" method="post">
             <button className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
               Abmelden
