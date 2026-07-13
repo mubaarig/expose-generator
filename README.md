@@ -4,6 +4,8 @@ Aus strukturierten Immobilien-Eckdaten generiert dieses Mini-Tool ein profession
 
 **Stack:** Next.js 16 (App Router) · Supabase (Auth + Postgres + RLS) · Claude API · Vercel.
 
+**Live-Demo:** [expose-generator-eight.vercel.app](https://expose-generator-eight.vercel.app) — „Demo ansehen" öffnet die App per anonymer Session in einem Klick, ganz ohne Anmeldung.
+
 ---
 
 ## Warum dieses Projekt
@@ -52,7 +54,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-→ [http://localhost:3000](http://localhost:3000). Login per Magic Link, dann Eckdaten eingeben und generieren.
+→ [http://localhost:3000](http://localhost:3000). Login per E-Mail/Passwort oder Ein-Klick-Demo (anonyme Session), dann Eckdaten eingeben und generieren.
 
 ---
 
@@ -67,7 +69,7 @@ Route Handler ──(ANTHROPIC_API_KEY)──► Claude API
    (serverseitig, auth-guarded)
 ```
 
-- **Auth:** Supabase Magic Link (kein Passwort). Session-Refresh + Routenschutz in [`src/proxy.ts`](src/proxy.ts) → [`src/lib/supabase/middleware.ts`](src/lib/supabase/middleware.ts).
+- **Auth:** Supabase — E-Mail/Passwort als Hauptweg, Magic Link optional, plus Ein-Klick-Demo über anonyme Sessions. Session-Refresh + Routenschutz in [`src/proxy.ts`](src/proxy.ts) → [`src/lib/supabase/middleware.ts`](src/lib/supabase/middleware.ts).
 - **Datenzugriff:** Lesen/Schreiben von `properties`/`documents` direkt über den Browser-Client — abgesichert durch RLS.
 - **Generierung:** [`src/lib/anthropic.ts`](src/lib/anthropic.ts) kapselt Modell, System-Prompt-Vertrag und Prompt-Bau pro Abschnitt.
 
