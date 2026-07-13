@@ -1,10 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 const AUTH_TIMEOUT_MS = 12_000;
+
+// Übersetzt die kryptischen Supabase-Fehlercodes in verständliche Hinweise.
+function describeAuthError(code: string, description: string | null): string {
+  if (code === "otp_expired") {
+    return "Der E-Mail-Link war abgelaufen oder wurde schon geöffnet. Manche Postfächer (z. B. Outlook) klicken Links beim Scannen automatisch an und verbrauchen den Einmal-Link. Fordere einen neuen an oder nutze den Passwort-Login unten.";
+  }
+  if (code === "exchange_failed" || code === "missing_code") {
+    return "Die Anmeldung über den Link hat nicht geklappt. Fordere einen neuen Link an oder nutze den Passwort-Login unten.";
+  }
+  return description ?? "Anmeldung über den Link fehlgeschlagen.";
+}
 
 function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
   return Promise.race([
@@ -15,15 +26,27 @@ function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
   ]);
 }
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Fehler von fehlgeschlagenen Magic-/Bestätigungs-Links anzeigen. Unsere
+  // Redirects (Root + Callback) hängen die Details als ?error_code= an — hier
+  // konsistent für Server- und Client-Render, daher als Startwert der States.
+  const linkErrorCode = searchParams.get("error_code");
+  const linkError = linkErrorCode
+    ? describeAuthError(linkErrorCode, searchParams.get("error_description"))
+    : null;
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPasswordLogin, setShowPasswordLogin] = useState(false);
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
-    "idle",
+  const [showPasswordLogin, setShowPasswordLogin] = useState(
+    linkError !== null,
   );
-  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
+    linkError ? "error" : "idle",
+  );
+  const [error, setError] = useState<string | null>(linkError);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,7 +94,13 @@ export default function LoginPage() {
       result = await withTimeout(
         mode === "login"
           ? supabase.auth.signInWithPassword({ email, password })
-          : supabase.auth.signUp({ email, password }),
+          : supabase.auth.signUp({
+              email,
+              password,
+              options: {
+                emailRedirectTo: `${window.location.origin}/auth/callback`,
+              },
+            }),
         "Supabase antwortet gerade zu langsam. Bitte in ein paar Sekunden erneut versuchen.",
       );
     } catch (err) {
@@ -196,9 +225,19 @@ export default function LoginPage() {
             )}
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && (
+            <p className="text-sm leading-relaxed text-red-600">{error}</p>
+          )}
         </div>
       )}
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }
