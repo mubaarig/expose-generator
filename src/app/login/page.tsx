@@ -40,6 +40,7 @@ function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [showMagicLink, setShowMagicLink] = useState(false);
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
     linkError ? "error" : "idle",
@@ -161,15 +162,25 @@ function LoginForm() {
               placeholder="du@beispiel.de"
               className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-100"
             />
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Passwort (mind. 6 Zeichen)"
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-100"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Passwort (mind. 6 Zeichen)"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 pr-16 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-100"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Passwort verbergen" : "Passwort anzeigen"}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+              >
+                {showPassword ? "Verbergen" : "Anzeigen"}
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="submit"
