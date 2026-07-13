@@ -9,10 +9,10 @@ const AUTH_TIMEOUT_MS = 12_000;
 // Übersetzt die kryptischen Supabase-Fehlercodes in verständliche Hinweise.
 function describeAuthError(code: string, description: string | null): string {
   if (code === "otp_expired") {
-    return "Der E-Mail-Link war abgelaufen oder wurde schon geöffnet. Manche Postfächer (z. B. Outlook) klicken Links beim Scannen automatisch an und verbrauchen den Einmal-Link. Fordere einen neuen an oder nutze den Passwort-Login unten.";
+    return "Der E-Mail-Link war abgelaufen oder wurde schon geöffnet. Manche Postfächer (z. B. Outlook) klicken Links beim Scannen automatisch an und verbrauchen den Einmal-Link. Melde dich einfach oben mit E-Mail und Passwort an.";
   }
   if (code === "exchange_failed" || code === "missing_code") {
-    return "Die Anmeldung über den Link hat nicht geklappt. Fordere einen neuen Link an oder nutze den Passwort-Login unten.";
+    return "Die Anmeldung über den Link hat nicht geklappt. Melde dich oben mit E-Mail und Passwort an.";
   }
   return description ?? "Anmeldung über den Link fehlgeschlagen.";
 }
@@ -40,16 +40,18 @@ function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPasswordLogin, setShowPasswordLogin] = useState(
-    linkError !== null,
-  );
+  const [showMagicLink, setShowMagicLink] = useState(false);
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
     linkError ? "error" : "idle",
   );
   const [error, setError] = useState<string | null>(linkError);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function sendMagicLink() {
+    if (!email) {
+      setError("Bitte gib zuerst deine E-Mail-Adresse ein.");
+      setStatus("error");
+      return;
+    }
     setStatus("sending");
     setError(null);
 
@@ -62,15 +64,14 @@ function LoginForm() {
             emailRedirectTo: `${window.location.origin}/auth/callback`,
           },
         }),
-        "Supabase antwortet gerade zu langsam. Nutze den Passwort-Login unten oder versuche es später erneut.",
+        "Supabase antwortet gerade zu langsam. Nutze oben den Passwort-Login oder versuche es später erneut.",
       );
 
       if (error) {
         const isRateLimit = error.message.toLowerCase().includes("rate limit");
-        if (isRateLimit) setShowPasswordLogin(true);
         setError(
           isRateLimit
-            ? "Supabase hat gerade zu viele Magic-Link-E-Mails blockiert. Nutze den Passwort-Login unten oder warte kurz."
+            ? "Supabase hat gerade zu viele Magic-Link-E-Mails blockiert. Nutze oben den Passwort-Login oder warte kurz."
             : error.message,
         );
         setStatus("error");
@@ -78,7 +79,6 @@ function LoginForm() {
         setStatus("sent");
       }
     } catch (err) {
-      setShowPasswordLogin(true);
       setError(err instanceof Error ? err.message : "Auth-Anfrage fehlgeschlagen.");
       setStatus("error");
     }
@@ -140,19 +140,18 @@ function LoginForm() {
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6">
       <h1 className="text-2xl font-semibold tracking-tight">Anmelden</h1>
       <p className="mt-2 text-sm text-zinc-500">
-        Wir schicken dir einen Magic Link per E-Mail — kein Passwort nötig.
+        Melde dich mit E-Mail und Passwort an — oder lege in einem Schritt einen
+        Account an.
       </p>
 
       {status === "sent" ? (
         <div className="mt-8 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-          {showPasswordLogin
-            ? "Account angelegt. Falls Supabase E-Mail-Bestätigung verlangt, bestätige die Adresse und melde dich danach per Passwort an."
-            : "Link ist unterwegs. Schau in dein Postfach für "}
-          {!showPasswordLogin && <span className="font-medium">{email}</span>}
+          Link ist unterwegs. Schau in dein Postfach für{" "}
+          <span className="font-medium">{email}</span>.
         </div>
       ) : (
         <div className="mt-8 flex flex-col gap-5">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-3">
             <input
               type="email"
               required
@@ -162,13 +161,32 @@ function LoginForm() {
               placeholder="du@beispiel.de"
               className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-100"
             />
-            <button
-              type="submit"
-              disabled={status === "sending"}
-              className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-            >
-              {status === "sending" ? "Wird gesendet…" : "Magic Link senden"}
-            </button>
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Passwort (mind. 6 Zeichen)"
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-100"
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="submit"
+                disabled={status === "sending"}
+                className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+              >
+                {status === "sending" ? "…" : "Einloggen"}
+              </button>
+              <button
+                type="button"
+                disabled={status === "sending"}
+                onClick={() => submitPassword("signup")}
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              >
+                Account anlegen
+              </button>
+            </div>
           </form>
 
           <div className="border-t border-zinc-200 pt-5 dark:border-zinc-800">
@@ -177,51 +195,32 @@ function LoginForm() {
               onClick={() => {
                 setStatus("idle");
                 setError(null);
-                setShowPasswordLogin((v) => !v);
+                setShowMagicLink((v) => !v);
               }}
               className="text-sm font-medium text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-zinc-100"
             >
-              {showPasswordLogin
-                ? "Passwort-Login ausblenden"
-                : "Passwort-Login als Fallback"}
+              {showMagicLink
+                ? "Magic Link ausblenden"
+                : "Lieber per Magic Link (E-Mail) anmelden"}
             </button>
 
-            {showPasswordLogin && (
-              <form
-                onSubmit={handlePasswordSubmit}
-                className="mt-4 flex flex-col gap-3"
-              >
+            {showMagicLink && (
+              <div className="mt-4 flex flex-col gap-2">
                 <p className="text-xs leading-relaxed text-zinc-500">
-                  Wenn Supabase E-Mail-Bestätigung verlangt, lege Demo-User im
-                  Supabase-Dashboard an und bestätige sie dort direkt.
+                  Wir senden einen Anmeldelink an die oben eingegebene Adresse.
+                  Hinweis: Manche Postfächer (z. B. Outlook) verbrauchen den
+                  Einmal-Link beim Scannen — der Passwort-Login oben ist
+                  zuverlässiger.
                 </p>
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Passwort"
-                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-100"
-                />
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="submit"
-                    disabled={status === "sending"}
-                    className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-                  >
-                    Einloggen
-                  </button>
-                  <button
-                    type="button"
-                    disabled={status === "sending"}
-                    onClick={() => submitPassword("signup")}
-                    className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
-                  >
-                    Account anlegen
-                  </button>
-                </div>
-              </form>
+                <button
+                  type="button"
+                  disabled={status === "sending"}
+                  onClick={sendMagicLink}
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  {status === "sending" ? "Wird gesendet…" : "Magic Link senden"}
+                </button>
+              </div>
             )}
           </div>
 
