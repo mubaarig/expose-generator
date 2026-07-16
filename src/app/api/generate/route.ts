@@ -9,6 +9,12 @@ const MAX_ADDRESS = 200;
 const MAX_NOTES = 1000;
 const MAX_CONDITION = 50;
 
+// A stream has already sent its HTTP headers by the time Anthropic can fail.
+// Send a small in-band marker instead of erroring the ReadableStream: some
+// runtimes otherwise replace the body with their full HTML 500 page, which the
+// client could mistake for generated exposé text.
+const STREAM_ERROR_MARKER = "\n\u0000EXPOSE_GENERATION_ERROR\u0000";
+
 // numeric: null allowed, otherwise a finite number in a sane range.
 function numInRange(v: unknown, min: number, max: number): boolean {
   return (
@@ -152,7 +158,16 @@ export async function POST(request: NextRequest) {
           return;
         }
         console.error("Generation failed:", err);
-        controller.error(err);
+        try {
+          controller.enqueue(
+            encoder.encode(
+              `${STREAM_ERROR_MARKER}Der Abschnitt konnte gerade nicht erstellt werden. Bitte erneut versuchen.`,
+            ),
+          );
+          controller.close();
+        } catch {
+          // The stream may already have been closed by the client.
+        }
       }
     },
     cancel() {

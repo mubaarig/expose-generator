@@ -27,6 +27,7 @@ const demoForm: PropertyInput = {
 };
 
 const CONDITION_OPTIONS = ["neuwertig", "renoviert", "gepflegt", "teilsaniert", "renovierungsbedürftig"] as const;
+const STREAM_ERROR_MARKER = "\n\u0000EXPOSE_GENERATION_ERROR\u0000";
 
 const emptySections = (): Record<SectionKey, PreviewSectionState> =>
   Object.fromEntries(SECTION_KEYS.map((key) => [key, { text: "", status: "empty" }])) as Record<SectionKey, PreviewSectionState>;
@@ -62,10 +63,12 @@ export default function Generator({ model }: { model: string }) {
       });
 
       if (!response.ok || !response.body) {
-        const raw = await response.text().catch(() => "");
-        let message = raw;
-        try { message = (JSON.parse(raw) as { error?: string })?.error ?? raw; } catch { /* keep raw response */ }
-        throw new Error(message || `Generierung fehlgeschlagen (${response.status})`);
+        const contentType = response.headers.get("content-type") ?? "";
+        if (contentType.includes("application/json")) {
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(payload?.error ?? `Generierung fehlgeschlagen (${response.status})`);
+        }
+        throw new Error("Der Generierungsdienst ist gerade nicht erreichbar. Bitte erneut versuchen.");
       }
 
       const reader = response.body.getReader();
@@ -75,6 +78,11 @@ export default function Generator({ model }: { model: string }) {
         const { done, value } = await reader.read();
         if (done) break;
         text += decoder.decode(value, { stream: true });
+        const errorAt = text.indexOf(STREAM_ERROR_MARKER);
+        if (errorAt >= 0) {
+          const message = text.slice(errorAt + STREAM_ERROR_MARKER.length).trim();
+          throw new Error(message || "Der Abschnitt konnte gerade nicht erstellt werden.");
+        }
         setSections((current) => ({ ...current, [section]: { text, status: "streaming" } }));
       }
       setSections((current) => ({ ...current, [section]: { text, status: "done" } }));
