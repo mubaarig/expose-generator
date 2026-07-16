@@ -81,6 +81,45 @@ properties   id, user_id, address, size_sqm, rooms, year_built, condition, notes
 documents    id, property_id, user_id, content (jsonb), model, prompt_version, created_at
 ```
 
+## Cost governance
+
+Every generation is a paid Claude call, and the one-click demo can mint
+unlimited anonymous sessions — so spend is bounded deliberately, not left open.
+The controls live in [`supabase/schema.sql`](supabase/schema.sql) and the
+generate route ([`/api/generate`](src/app/api/generate/route.ts)):
+
+- **Metering.** Every section call is logged to `generation_usage` (user,
+  section, model, input/output tokens). This is the authoritative usage log and
+  the basis for every limit below.
+- **Per-user daily quota.** A `check_generation_allowed()` database function
+  caps calls per user per day (one exposé = 4 section calls).
+- **Stricter anonymous limit.** Demo users (anonymous Supabase sessions) get a
+  much lower daily allowance than verified accounts — currently 8 calls/day
+  (≈ 2 exposés) vs. 40/day. The function reads `is_anonymous` from the JWT, so a
+  direct RPC call can't claim to be a verified user to get the higher limit.
+- **Global daily ceiling (kill switch).** An org-wide daily token budget, summed
+  across all users, is the hard backstop against a runaway loop or a viral
+  spike. This is a deliberate design feature, not an afterthought.
+- **Fail closed on the quota check, fail open on logging.** If the quota check
+  errors, generation is refused (`429`) rather than run uncapped; if the
+  post-generation usage insert fails, it's logged but the already-delivered
+  generation still succeeds.
+
+Limits are constants in `check_generation_allowed()` — edit and re-run
+`schema.sql` to change them. Inputs are also length- and range-bounded in the
+route so a large `notes` field can't inflate token cost, and the Anthropic
+stream is aborted when the client disconnects.
+
+### Migration / setup
+
+1. Run [`supabase/schema.sql`](supabase/schema.sql) in the Supabase SQL editor
+   (idempotent — safe to re-run; it creates `generation_usage`, its RLS
+   policies, and `check_generation_allowed()`).
+2. Enable **Authentication → Bot and Abuse Protection → CAPTCHA** in the
+   Supabase dashboard. The per-user quotas cap spend once a session exists;
+   CAPTCHA is what throttles automated creation of anonymous sessions in the
+   first place.
+
 ## Deploy (Vercel)
 
 1. Connect the repo to Vercel.
