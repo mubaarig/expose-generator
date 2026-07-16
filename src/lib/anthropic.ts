@@ -2,8 +2,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { PropertyInput, SectionKey } from "./types";
 import { SECTIONS } from "./types";
 
-// Model is server-side configurable; default = most capable Opus.
-export const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-opus-4-8";
+// Model is server-side configurable. Default = Sonnet: for a 2–4 sentence
+// property blurb it is effectively on par with Opus but far cheaper. Override
+// with ANTHROPIC_MODEL (e.g. claude-opus-4-8).
+export const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6";
 
 // Versioned so stored documents stay traceable as we evolve the prompt
 // (recorded in documents.prompt_version).

@@ -76,7 +76,15 @@ export default function Generator() {
       });
 
       if (!res.ok || !res.body) {
-        const msg = await res.text().catch(() => "");
+        // Error responses (e.g. 429 quota/capacity) are JSON ({ error }); show
+        // that message instead of rendering raw JSON in the section card.
+        const raw = await res.text().catch(() => "");
+        let msg = raw;
+        try {
+          msg = (JSON.parse(raw) as { error?: string })?.error ?? raw;
+        } catch {
+          // not JSON — keep the raw text.
+        }
         throw new Error(msg || `Fehler ${res.status}`);
       }
 
