@@ -40,7 +40,7 @@ export default function Generator({ model }: { model: string }) {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [addressError, setAddressError] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<Partial<Record<keyof PropertyInput, string>>>({});
 
   const hasContent = SECTION_KEYS.some((key) => sections[key].status === "done");
   const hasStarted = SECTION_KEYS.some((key) => sections[key].status !== "empty");
@@ -51,6 +51,22 @@ export default function Generator({ model }: { model: string }) {
     if (value.trim() === "") return null;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function clearFieldError(field: keyof PropertyInput) {
+    setFormErrors((current) => ({ ...current, [field]: undefined }));
+  }
+
+  function validateForm(): boolean {
+    const errors: Partial<Record<keyof PropertyInput, string>> = {};
+    if (!form.address.trim()) errors.address = "Bitte geben Sie eine Objektadresse ein.";
+    if (form.size_sqm == null) errors.size_sqm = "Bitte geben Sie die Wohnfläche ein.";
+    if (form.rooms == null) errors.rooms = "Bitte geben Sie die Zimmeranzahl ein.";
+    if (form.year_built == null) errors.year_built = "Bitte geben Sie das Baujahr ein.";
+    if (!form.condition?.trim()) errors.condition = "Bitte wählen Sie den Zustand.";
+    if (!form.notes?.trim()) errors.notes = "Bitte ergänzen Sie die Objektnotizen.";
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   }
 
   async function generateSection(section: SectionKey) {
@@ -95,11 +111,7 @@ export default function Generator({ model }: { model: string }) {
   }
 
   async function generateAll() {
-    if (!form.address.trim()) {
-      setAddressError("Bitte geben Sie eine Objektadresse ein.");
-      return;
-    }
-    setAddressError(null);
+    if (!validateForm()) return;
     setBusy(true);
     setSaveMsg(null);
     await Promise.all(SECTION_KEYS.map(generateSection));
@@ -111,7 +123,7 @@ export default function Generator({ model }: { model: string }) {
     setForm(emptyForm);
     setSections(emptySections());
     setSaveMsg(null);
-    setAddressError(null);
+    setFormErrors({});
   }
 
   function useDemoData() {
@@ -119,7 +131,7 @@ export default function Generator({ model }: { model: string }) {
     setForm(demoForm);
     setSections(emptySections());
     setSaveMsg(null);
-    setAddressError(null);
+    setFormErrors({});
   }
 
   function exposeText(): string {
@@ -205,28 +217,28 @@ export default function Generator({ model }: { model: string }) {
           <div className="px-5 py-6 sm:px-6">
             <FormSection number="01" title="Objektidentität" description="Adresse und zentrale Eckdaten des Objekts.">
               <div className="grid gap-4">
-                <Field label="Objektadresse" required error={addressError}>
-                  <input className={inputCls} autoComplete="street-address" value={form.address} onChange={(event) => { setForm({ ...form, address: event.target.value }); if (event.target.value.trim()) setAddressError(null); }} placeholder="Straße, Hausnummer, PLZ, Ort" />
+                <Field label="Objektadresse" required error={formErrors.address}>
+                  <input required className={inputCls} autoComplete="street-address" value={form.address} onChange={(event) => { setForm({ ...form, address: event.target.value }); clearFieldError("address"); }} placeholder="Straße, Hausnummer, PLZ, Ort" />
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Wohnfläche" suffix="m²"><input className={`${inputCls} pr-10 tabular-nums`} inputMode="decimal" value={form.size_sqm ?? ""} onChange={(event) => setForm({ ...form, size_sqm: num(event.target.value) })} /></Field>
-                  <Field label="Zimmer"><input className={`${inputCls} tabular-nums`} inputMode="decimal" value={form.rooms ?? ""} onChange={(event) => setForm({ ...form, rooms: num(event.target.value) })} /></Field>
+                  <Field label="Wohnfläche" required error={formErrors.size_sqm} suffix="m²"><input required className={`${inputCls} pr-10 tabular-nums`} inputMode="decimal" value={form.size_sqm ?? ""} onChange={(event) => { setForm({ ...form, size_sqm: num(event.target.value) }); clearFieldError("size_sqm"); }} /></Field>
+                  <Field label="Zimmer" required error={formErrors.rooms}><input required className={`${inputCls} tabular-nums`} inputMode="decimal" value={form.rooms ?? ""} onChange={(event) => { setForm({ ...form, rooms: num(event.target.value) }); clearFieldError("rooms"); }} /></Field>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Baujahr"><input className={`${inputCls} tabular-nums`} inputMode="numeric" value={form.year_built ?? ""} onChange={(event) => setForm({ ...form, year_built: num(event.target.value) })} /></Field>
-                  <Field label="Zustand"><select className={inputCls} value={form.condition ?? ""} onChange={(event) => setForm({ ...form, condition: event.target.value })}><option value="">Bitte wählen</option>{CONDITION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></Field>
+                  <Field label="Baujahr" required error={formErrors.year_built}><input required className={`${inputCls} tabular-nums`} inputMode="numeric" value={form.year_built ?? ""} onChange={(event) => { setForm({ ...form, year_built: num(event.target.value) }); clearFieldError("year_built"); }} /></Field>
+                  <Field label="Zustand" required error={formErrors.condition}><select required className={inputCls} value={form.condition ?? ""} onChange={(event) => { setForm({ ...form, condition: event.target.value }); clearFieldError("condition"); }}><option value="">Bitte wählen</option>{CONDITION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></Field>
                 </div>
               </div>
             </FormSection>
 
             <FormSection number="02" title="Angaben & Besonderheiten" description="Nur belegbare Merkmale angeben; fehlende Fakten werden nicht ergänzt.">
-              <Field label="Objektnotizen" hint={`${form.notes?.length ?? 0}/1.000 Zeichen`}>
-                <textarea className={`${inputCls} min-h-24 resize-y py-2.5`} maxLength={1000} value={form.notes ?? ""} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Grundriss, Ausstattung, Lage, Modernisierungen und besondere Merkmale …" />
+              <Field label="Objektnotizen" required error={formErrors.notes} hint={`${form.notes?.length ?? 0}/1.000 Zeichen`}>
+                <textarea required className={`${inputCls} min-h-24 resize-y py-2.5`} maxLength={1000} value={form.notes ?? ""} onChange={(event) => { setForm({ ...form, notes: event.target.value }); clearFieldError("notes"); }} placeholder="Grundriss, Ausstattung, Lage, Modernisierungen und besondere Merkmale …" />
               </Field>
             </FormSection>
 
             <div className="border-t border-line pt-6">
-              <button type="button" onClick={generateAll} disabled={busy || !form.address.trim()} className="flex min-h-12 w-full items-center justify-between bg-ink px-4 text-sm font-semibold text-surface transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-45">
+              <button type="button" onClick={generateAll} disabled={busy} className="flex min-h-12 w-full items-center justify-between bg-ink px-4 text-sm font-semibold text-surface transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-45">
                 <span>{busy ? "Exposé wird erstellt …" : hasStarted ? "Gesamten Entwurf neu erstellen" : "Exposé-Entwurf generieren"}</span>
                 <span aria-hidden>{busy ? `${completedCount}/4` : "→"}</span>
               </button>

@@ -59,6 +59,21 @@ export async function POST(request: NextRequest) {
   if (!property?.address?.trim()) {
     return badRequest("Adresse ist erforderlich");
   }
+  if (property.size_sqm == null) {
+    return badRequest("Wohnfläche ist erforderlich");
+  }
+  if (property.rooms == null) {
+    return badRequest("Zimmeranzahl ist erforderlich");
+  }
+  if (property.year_built == null) {
+    return badRequest("Baujahr ist erforderlich");
+  }
+  if (!property.condition?.trim()) {
+    return badRequest("Zustand ist erforderlich");
+  }
+  if (!property.notes?.trim()) {
+    return badRequest("Objektnotizen sind erforderlich");
+  }
   if (property.address.length > MAX_ADDRESS) {
     return badRequest(`Adresse ist zu lang (max. ${MAX_ADDRESS} Zeichen).`);
   }
