@@ -1,79 +1,79 @@
-# Exposé-Assistent
+# Exposé Assistant
 
-Aus strukturierten Immobilien-Eckdaten generiert dieses Mini-Tool ein professionelles Wohnungs-Exposé. Nutzer:innen geben Adresse, Fläche, Zimmer, Zustand, Baujahr und ein paar Freitext-Notizen ein — Claude schreibt daraus vier saubere Abschnitte (**Lage, Ausstattung, Zustand, Fazit**), die einzeln neu generiert und gespeichert werden können.
+From structured property facts this mini tool generates a professional apartment exposé. Users enter address, size, rooms, condition, year built and a few free-text notes — Claude turns them into four clean sections (**Lage, Ausstattung, Zustand, Fazit** — location, features, condition, summary), each of which can be regenerated individually and saved.
 
 **Stack:** Next.js 16 (App Router) · Supabase (Auth + Postgres + RLS) · Claude API · Vercel.
 
-**Live-Demo:** [expose-generator-eight.vercel.app](https://expose-generator-eight.vercel.app) — „Demo ansehen" öffnet die App per anonymer Session in einem Klick, ganz ohne Anmeldung.
+**Live demo:** [expose-generator-eight.vercel.app](https://expose-generator-eight.vercel.app) — "Demo ansehen" opens the app via an anonymous session in one click, no sign-up required.
 
 ---
 
-## Warum dieses Projekt
+## Why this project
 
-Es zeigt das Kernmuster von Gutachten-/Fachdokument-KI in Kleinformat: **strukturierte Daten + LLM → verlässliches Fachdokument** — ohne ein bestehendes Produkt nachzubauen. Andere Domäne, gleiches Problem.
+It shows the core pattern of assessment/technical-document AI in miniature: **structured data + LLM → reliable technical document** — without cloning an existing product. Different domain, same problem.
 
-Drei bewusste "Senior-Signale" im Code:
+Three deliberate "senior signals" in the code:
 
-1. **Row Level Security auf allen Tabellen** (`user_id = auth.uid()`). Datentrennung passiert in der Datenbank, nicht in der App-Logik — der Browser spricht mit dem öffentlichen anon-Key direkt gegen Supabase und sieht trotzdem nur eigene Zeilen. Siehe [`supabase/schema.sql`](supabase/schema.sql).
-2. **Strukturierte Speicherung als JSONB** (`documents.content = { lage, ausstattung, zustand, fazit }`) statt Textblob. Das macht einzelne Regeneration und verlässliche Weiterverarbeitung erst möglich, und die versionierte `prompt_version` hält gespeicherte Dokumente nachvollziehbar.
-3. **Streaming + serverseitiger API-Key.** Die Generierung läuft über einen Route Handler ([`/api/generate`](src/app/api/generate/route.ts)); der Anthropic-Key erreicht den Browser nie. Der Text wird tokenweise gestreamt — alle vier Abschnitte parallel.
+1. **Row Level Security on all tables** (`user_id = auth.uid()`). Data separation happens in the database, not in app logic — the browser talks to Supabase directly with the public anon key and still sees only its own rows. See [`supabase/schema.sql`](supabase/schema.sql).
+2. **Structured storage as JSONB** (`documents.content = { lage, ausstattung, zustand, fazit }`) instead of a text blob. This is what makes individual regeneration and reliable downstream processing possible, and the versioned `prompt_version` keeps stored documents traceable.
+3. **Streaming + server-side API key.** Generation runs through a route handler ([`/api/generate`](src/app/api/generate/route.ts)); the Anthropic key never reaches the browser. Text is streamed token by token — all four sections in parallel.
 
 ---
 
-## Lokal starten
+## Run locally
 
-### 1. Abhängigkeiten
+### 1. Dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Supabase-Projekt
+### 2. Supabase project
 
-1. Projekt auf [supabase.com](https://supabase.com) anlegen.
-2. SQL Editor öffnen und den Inhalt von [`supabase/schema.sql`](supabase/schema.sql) ausführen (Tabellen, RLS-Policies, Auto-Profil-Trigger).
-3. Unter **Authentication → URL Configuration** die Redirect-URL `http://localhost:3000/auth/callback` (und später die Vercel-URL) eintragen.
+1. Create a project on [supabase.com](https://supabase.com).
+2. Open the SQL editor and run the contents of [`supabase/schema.sql`](supabase/schema.sql) (tables, RLS policies, auto-profile trigger).
+3. Under **Authentication → URL Configuration** add the redirect URL `http://localhost:3000/auth/callback` (and later the Vercel URL).
 
 ### 3. Environment
 
-`.env.example` nach `.env.local` kopieren und ausfüllen:
+Copy `.env.example` to `.env.local` and fill it in:
 
 ```bash
 cp .env.example .env.local
 ```
 
-| Variable | Quelle |
+| Variable | Source |
 | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Project Settings → API |
 | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) → API Keys |
 
-### 4. Dev-Server
+### 4. Dev server
 
 ```bash
 npm run dev
 ```
 
-→ [http://localhost:3000](http://localhost:3000). Login per E-Mail/Passwort oder Ein-Klick-Demo (anonyme Session), dann Eckdaten eingeben und generieren.
+→ [http://localhost:3000](http://localhost:3000). Log in with email/password or the one-click demo (anonymous session), then enter the property facts and generate.
 
 ---
 
-## Architektur
+## Architecture
 
 ```
 Browser ──(anon key, RLS)──────────────► Supabase Postgres
    │                                         ▲
    │  POST /api/generate (streaming)         │ properties, documents
    ▼                                         │
-Route Handler ──(ANTHROPIC_API_KEY)──► Claude API
-   (serverseitig, auth-guarded)
+Route handler ──(ANTHROPIC_API_KEY)──► Claude API
+   (server-side, auth-guarded)
 ```
 
-- **Auth:** Supabase — E-Mail/Passwort als Hauptweg, Magic Link optional, plus Ein-Klick-Demo über anonyme Sessions. Session-Refresh + Routenschutz in [`src/proxy.ts`](src/proxy.ts) → [`src/lib/supabase/middleware.ts`](src/lib/supabase/middleware.ts).
-- **Datenzugriff:** Lesen/Schreiben von `properties`/`documents` direkt über den Browser-Client — abgesichert durch RLS.
-- **Generierung:** [`src/lib/anthropic.ts`](src/lib/anthropic.ts) kapselt Modell, System-Prompt-Vertrag und Prompt-Bau pro Abschnitt.
+- **Auth:** Supabase — email/password as the primary path, magic link optional, plus a one-click demo via anonymous sessions. Session refresh + route protection in [`src/proxy.ts`](src/proxy.ts) → [`src/lib/supabase/middleware.ts`](src/lib/supabase/middleware.ts).
+- **Data access:** reading/writing `properties`/`documents` directly through the browser client — secured by RLS.
+- **Generation:** [`src/lib/anthropic.ts`](src/lib/anthropic.ts) encapsulates the model, the system-prompt contract and per-section prompt building.
 
-## Datenmodell
+## Data model
 
 ```
 profiles     id (= auth.users.id), name, created_at
@@ -81,18 +81,57 @@ properties   id, user_id, address, size_sqm, rooms, year_built, condition, notes
 documents    id, property_id, user_id, content (jsonb), model, prompt_version, created_at
 ```
 
+## Cost governance
+
+Every generation is a paid Claude call, and the one-click demo can mint
+unlimited anonymous sessions — so spend is bounded deliberately, not left open.
+The controls live in [`supabase/schema.sql`](supabase/schema.sql) and the
+generate route ([`/api/generate`](src/app/api/generate/route.ts)):
+
+- **Metering.** Every section call is logged to `generation_usage` (user,
+  section, model, input/output tokens). This is the authoritative usage log and
+  the basis for every limit below.
+- **Per-user daily quota.** A `check_generation_allowed()` database function
+  caps calls per user per day (one exposé = 4 section calls).
+- **Stricter anonymous limit.** Demo users (anonymous Supabase sessions) get a
+  much lower daily allowance than verified accounts — currently 8 calls/day
+  (≈ 2 exposés) vs. 40/day. The function reads `is_anonymous` from the JWT, so a
+  direct RPC call can't claim to be a verified user to get the higher limit.
+- **Global daily ceiling (kill switch).** An org-wide daily token budget, summed
+  across all users, is the hard backstop against a runaway loop or a viral
+  spike. This is a deliberate design feature, not an afterthought.
+- **Fail closed on the quota check, fail open on logging.** If the quota check
+  errors, generation is refused (`429`) rather than run uncapped; if the
+  post-generation usage insert fails, it's logged but the already-delivered
+  generation still succeeds.
+
+Limits are constants in `check_generation_allowed()` — edit and re-run
+`schema.sql` to change them. Inputs are also length- and range-bounded in the
+route so a large `notes` field can't inflate token cost, and the Anthropic
+stream is aborted when the client disconnects.
+
+### Migration / setup
+
+1. Run [`supabase/schema.sql`](supabase/schema.sql) in the Supabase SQL editor
+   (idempotent — safe to re-run; it creates `generation_usage`, its RLS
+   policies, and `check_generation_allowed()`).
+2. Enable **Authentication → Bot and Abuse Protection → CAPTCHA** in the
+   Supabase dashboard. The per-user quotas cap spend once a session exists;
+   CAPTCHA is what throttles automated creation of anonymous sessions in the
+   first place.
+
 ## Deploy (Vercel)
 
-1. Repo mit Vercel verbinden.
-2. Die drei Environment-Variablen im Vercel-Projekt setzen.
-3. In Supabase die Vercel-URL als Redirect-URL ergänzen (`https://<projekt>.vercel.app/auth/callback`).
+1. Connect the repo to Vercel.
+2. Set the three environment variables in the Vercel project.
+3. In Supabase add the Vercel URL as a redirect URL (`https://<project>.vercel.app/auth/callback`).
 
 ---
 
-## Gebaut an einem Wochenende mit Claude Code
+## Built in a weekend with Claude Code
 
-Dieses Projekt ist von Anfang bis Ende mit [Claude Code](https://claude.com/claude-code) entstanden — Scaffolding, RLS-Policies, Streaming-Route und UI. Workflow:
+This project was built end to end with [Claude Code](https://claude.com/claude-code) — scaffolding, RLS policies, streaming route and UI. Workflow:
 
-- **Setup zuerst absichern:** Next.js + Supabase-Clients + RLS + Auth durchgestochen, bevor eine Zeile Feature-Code entstand — der Teil mit den meisten Stolpersteinen.
-- **Der LLM-Kern als Schaufenster:** Prompt-Vertrag zentral in einer Lib, Streaming über einen Route Handler, Key strikt serverseitig.
-- **Schmaler, polierter Scope** statt breit und halbfertig: bewusst weggelassen wurden Teams/Sharing, Zahlungen und weitere Dokumenttypen.
+- **Nail the setup first:** wire Next.js + Supabase clients + RLS + auth end to end before a single line of feature code — the part with the most pitfalls.
+- **The LLM core as the showcase:** prompt contract centralized in a lib, streaming through a route handler, key strictly server-side.
+- **Narrow, polished scope** instead of broad and half-finished: teams/sharing, payments and further document types were deliberately left out.

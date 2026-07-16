@@ -26,9 +26,9 @@ export default async function Home({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  // Supabase hängt bei einem fehlgeschlagenen Magic-/Bestätigungs-Link die
-  // Fehlerdetails an die Site-URL (= diese Root-Seite). Statt sie stumm zu
-  // verschlucken, reichen wir sie an die Login-Seite weiter.
+  // On a failed magic/confirmation link, Supabase appends the error details
+  // to the site URL (= this root page). Instead of swallowing them silently,
+  // we forward them to the login page.
   const params = await searchParams;
   const errorCode = params.error_code ?? params.error;
   if (typeof errorCode === "string") {
@@ -39,7 +39,7 @@ export default async function Home({
     redirect(`/login?${forward.toString()}`);
   }
 
-  // Eingeloggte Nutzer direkt ins Dashboard.
+  // Send logged-in users straight to the dashboard.
   if (getSupabaseEnv()) {
     const supabase = await createClient();
     const {

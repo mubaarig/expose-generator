@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-// Ein-Klick-Demo: anonyme Supabase-Anmeldung, kein Konto, keine E-Mail.
-// Setzt voraus, dass „Anonymous sign-ins" im Supabase-Dashboard aktiv ist.
+// One-click demo: anonymous Supabase sign-in, no account, no email.
+// Requires "Anonymous sign-ins" to be enabled in the Supabase dashboard.
 export default function DemoButton({
   variant = "primary",
   label = "Demo ansehen — ohne Anmeldung",

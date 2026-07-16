@@ -2,8 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getSupabaseEnv } from "@/lib/env";
 
-// Server-Client: für Server Components, Route Handler und Server Actions.
-// In Next.js 16 ist cookies() async — daher await.
+// Server client: for Server Components, Route Handlers and Server Actions.
+// In Next.js 16 cookies() is async — hence the await.
 export async function createClient() {
   const cookieStore = await cookies();
   const env = getSupabaseEnv();
@@ -28,8 +28,8 @@ export async function createClient() {
               cookieStore.set(name, value, options),
             );
           } catch {
-            // In Server Components ist Schreiben nicht erlaubt — das
-            // Session-Refresh übernimmt die Middleware. Hier bewusst ignorieren.
+            // Writing is not allowed in Server Components — the middleware
+            // handles session refresh. Deliberately ignored here.
           }
         },
       },

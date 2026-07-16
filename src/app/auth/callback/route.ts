@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-// Ziel des Magic-Link-Klicks. Supabase (PKCE-Flow) hängt einen ?code an;
-// wir tauschen ihn gegen eine Session und leiten weiter.
+// Target of the magic-link click. Supabase (PKCE flow) appends a ?code;
+// we exchange it for a session and redirect.
 function loginWithError(
   origin: string,
   code: string,
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/dashboard";
 
-  // Supabase kann den Fehler auch direkt an den Callback hängen (statt an /).
+  // Supabase may also attach the error directly to the callback (instead of /).
   const passthroughError = searchParams.get("error_code") ?? searchParams.get("error");
   if (passthroughError) {
     return NextResponse.redirect(

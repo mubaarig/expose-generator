@@ -1,4 +1,4 @@
-// Gemeinsame Domänen-Typen.
+// Shared domain types.
 
 export type Property = {
   id: string;
@@ -12,7 +12,7 @@ export type Property = {
   created_at: string;
 };
 
-// Eingabe fürs Generieren (vor dem Speichern liegt evtl. noch keine id vor).
+// Input for generation (there may not be an id yet before saving).
 export type PropertyInput = {
   address: string;
   size_sqm: number | null;
@@ -43,7 +43,7 @@ export type ExposeDocument = {
   created_at: string;
 };
 
-// Anzeige-Metadaten pro Abschnitt (Reihenfolge = Anzeigereihenfolge).
+// Display metadata per section (order = display order).
 export const SECTIONS: { key: SectionKey; title: string; hint: string }[] = [
   { key: "lage", title: "Lage", hint: "Umgebung, Anbindung, Wohngefühl" },
   {

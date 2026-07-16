@@ -48,8 +48,8 @@ const emptySections = (): Record<SectionKey, SectionState> =>
 
 export default function Generator() {
   const router = useRouter();
-  // Vorbefülltes Beispiel: Besucher sehen sofort ausgefüllte Felder und können
-  // direkt „Exposé generieren" klicken.
+  // Prefilled example: visitors see filled-in fields right away and can click
+  // "Exposé generieren" immediately.
   const [form, setForm] = useState<PropertyInput>(demoForm);
   const [sections, setSections] =
     useState<Record<SectionKey, SectionState>>(emptySections);
@@ -64,7 +64,7 @@ export default function Generator() {
     return Number.isFinite(n) ? n : null;
   }
 
-  // Streamt einen Abschnitt tokenweise in seine Karte.
+  // Streams a section token by token into its card.
   async function generateSection(section: SectionKey) {
     setSections((s) => ({ ...s, [section]: { text: "", status: "streaming" } }));
 
@@ -76,7 +76,15 @@ export default function Generator() {
       });
 
       if (!res.ok || !res.body) {
-        const msg = await res.text().catch(() => "");
+        // Error responses (e.g. 429 quota/capacity) are JSON ({ error }); show
+        // that message instead of rendering raw JSON in the section card.
+        const raw = await res.text().catch(() => "");
+        let msg = raw;
+        try {
+          msg = (JSON.parse(raw) as { error?: string })?.error ?? raw;
+        } catch {
+          // not JSON — keep the raw text.
+        }
         throw new Error(msg || `Fehler ${res.status}`);
       }
 
@@ -107,7 +115,7 @@ export default function Generator() {
     }
   }
 
-  // Alle vier Abschnitte parallel generieren.
+  // Generate all four sections in parallel.
   async function generateAll() {
     if (!form.address.trim()) return;
     setBusy(true);
@@ -124,7 +132,7 @@ export default function Generator() {
     setSaveMsg(null);
   }
 
-  // Fertige Abschnitte als sauber formatierter Text.
+  // Finished sections as cleanly formatted text.
   function exposeText(): string {
     const body = SECTIONS.filter((s) => sections[s.key].status === "done")
       .map((s) => `${s.title.toUpperCase()}\n${sections[s.key].text}`)
@@ -142,7 +150,7 @@ export default function Generator() {
     }
   }
 
-  // Druckansicht in neuem Fenster → Browser-„Als PDF speichern".
+  // Print view in a new window → browser "Save as PDF".
   function exportPdf() {
     const win = window.open("", "_blank", "width=800,height=1000");
     if (!win) return;
@@ -166,7 +174,7 @@ export default function Generator() {
     win.print();
   }
 
-  // Property + Dokument in Supabase speichern (RLS erzwingt Eigentum).
+  // Save property + document to Supabase (RLS enforces ownership).
   async function save() {
     if (saving) return;
     setSaving(true);
@@ -226,7 +234,7 @@ export default function Generator() {
 
   return (
     <div className="grid gap-8 lg:grid-cols-[22rem_1fr]">
-      {/* Eingabeformular */}
+      {/* Input form */}
       <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -340,7 +348,7 @@ export default function Generator() {
         </div>
       </div>
 
-      {/* Abschnitte */}
+      {/* Sections */}
       <div className="flex flex-col gap-4">
         {hasContent && (
           <div className="flex items-center justify-end gap-2">
