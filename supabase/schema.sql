@@ -107,3 +107,105 @@ grant usage on schema public to authenticated;
 grant select, insert, update, delete
   on public.profiles, public.properties, public.documents
   to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- generation_usage: metering + quota basis (cost governance)
+-- ---------------------------------------------------------------------------
+-- One row per Anthropic call (= one exposé section). Basis for:
+--   * a per-user daily limit (bounds abuse / runaway usage)
+--   * an org-wide daily token ceiling (global kill switch)
+-- Users may read and insert only their own rows (RLS); the generate route
+-- inserts a row after each successful generation. One "generate" click =
+-- 4 section calls — the limits below already account for that.
+create table if not exists public.generation_usage (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references auth.users (id) on delete cascade,
+  section       text,
+  model         text,
+  input_tokens  integer not null default 0,
+  output_tokens integer not null default 0,
+  created_at    timestamptz not null default now()
+);
+
+create index if not exists generation_usage_user_created_idx
+  on public.generation_usage (user_id, created_at);
+
+alter table public.generation_usage enable row level security;
+
+drop policy if exists "generation_usage_select_own" on public.generation_usage;
+create policy "generation_usage_select_own" on public.generation_usage
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "generation_usage_insert_own" on public.generation_usage;
+create policy "generation_usage_insert_own" on public.generation_usage
+  for insert with check (auth.uid() = user_id);
+
+grant select, insert on public.generation_usage to authenticated;
+
+-- Quota check BEFORE the (paid) API call. Runs as a SECURITY DEFINER so it can
+-- sum across ALL rows (org-wide) despite RLS. Identity and anonymous status
+-- come from the JWT (auth.uid(), auth.jwt()), never from a parameter — so a
+-- direct RPC call with the anon key cannot claim to be a verified user and
+-- bypass the stricter demo limit.
+--
+-- Anonymous (demo) users are the real cost lever: the one-click demo button
+-- can mint unlimited anonymous sessions, so they get a much stricter daily
+-- limit, and the org-wide token ceiling is the hard backstop.
+--
+-- Limits are constants here (env-free); edit and re-run this file to change
+-- them. Reason strings are user-facing UI text, hence German.
+create or replace function public.check_generation_allowed()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  c_user_daily_limit constant int    := 40;       -- verified: 40 calls/day = 10 exposés
+  c_anon_daily_limit constant int    := 8;        -- demo: 8 calls/day = 2 exposés
+  c_org_daily_tokens constant bigint := 2000000;  -- org-wide kill switch: 2M tokens/day
+  v_user       uuid    := auth.uid();
+  v_is_anon    boolean := coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false);
+  v_limit      int;
+  v_day        timestamptz := date_trunc('day', now() at time zone 'UTC') at time zone 'UTC';
+  v_user_today int;
+  v_org_tokens bigint;
+begin
+  if v_user is null then
+    return jsonb_build_object('allowed', false, 'code', 'unauthenticated',
+      'reason', 'Nicht eingeloggt');
+  end if;
+
+  -- Org-wide kill switch first.
+  select coalesce(sum(input_tokens + output_tokens), 0)
+    into v_org_tokens
+    from public.generation_usage
+   where created_at >= v_day;
+
+  if v_org_tokens >= c_org_daily_tokens then
+    return jsonb_build_object('allowed', false, 'code', 'org_budget',
+      'reason', 'Tageskapazität erreicht. Bitte später erneut versuchen.');
+  end if;
+
+  -- Anonymous demo users get a much stricter daily limit.
+  v_limit := case when v_is_anon then c_anon_daily_limit else c_user_daily_limit end;
+
+  select count(*)
+    into v_user_today
+    from public.generation_usage
+   where user_id = v_user
+     and created_at >= v_day;
+
+  if v_user_today >= v_limit then
+    return jsonb_build_object('allowed', false, 'code', 'user_limit',
+      'reason', case when v_is_anon
+        then 'Demo-Limit erreicht. Bitte registrieren, um weitere Exposés zu erstellen.'
+        else 'Tageslimit erreicht. Morgen stehen wieder Generierungen zur Verfügung.'
+      end);
+  end if;
+
+  return jsonb_build_object('allowed', true);
+end;
+$$;
+
+grant execute on function public.check_generation_allowed() to authenticated;
