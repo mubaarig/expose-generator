@@ -154,6 +154,12 @@ grant select, insert on public.generation_usage to authenticated;
 --
 -- Limits are constants here (env-free); edit and re-run this file to change
 -- them. Reason strings are user-facing UI text, hence German.
+--
+-- Drop any older parameterized signatures from earlier iterations first, so the
+-- no-arg overload below is the only one and PostgREST can resolve the RPC call
+-- unambiguously.
+drop function if exists public.check_generation_allowed(int, bigint);
+drop function if exists public.check_generation_allowed(int, int, bigint);
 create or replace function public.check_generation_allowed()
 returns jsonb
 language plpgsql
