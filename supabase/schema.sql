@@ -1,16 +1,16 @@
--- Bericht-Assistent / Exposé-Generator — Schema + Row Level Security
--- Im Supabase SQL Editor ausführen (einmalig).
+-- Report Assistant / Exposé Generator — Schema + Row Level Security
+-- Run once in the Supabase SQL editor.
 --
--- Datenmodell:
+-- Data model:
 --   profiles   1─┐
---   properties ─┴─< documents   (ein Property kann mehrere Dokument-Versionen haben)
+--   properties ─┴─< documents   (a property can have multiple document versions)
 --
--- Kernidee der Absicherung: RLS auf ALLEN Tabellen, jede Policy prüft
--- `user_id = auth.uid()`. So sieht jede:r Nutzer:in ausschließlich die
--- eigenen Zeilen — auch bei direktem Zugriff über den anon-Key vom Client.
+-- Core security idea: RLS on ALL tables, every policy checks
+-- `user_id = auth.uid()`. So each user sees only their own rows — even when
+-- accessing directly through the anon key from the client.
 
 -- ---------------------------------------------------------------------------
--- profiles: 1:1 zu auth.users
+-- profiles: 1:1 with auth.users
 -- ---------------------------------------------------------------------------
 create table if not exists public.profiles (
   id         uuid primary key references auth.users (id) on delete cascade,
@@ -28,7 +28,7 @@ drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own" on public.profiles
   for update using (auth.uid() = id) with check (auth.uid() = id);
 
--- Profil automatisch anlegen, sobald ein User registriert wird.
+-- Create the profile automatically as soon as a user registers.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -47,7 +47,7 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- ---------------------------------------------------------------------------
--- properties: Eckdaten einer Immobilie
+-- properties: key facts of a property
 -- ---------------------------------------------------------------------------
 create table if not exists public.properties (
   id         uuid primary key default gen_random_uuid(),
@@ -56,8 +56,8 @@ create table if not exists public.properties (
   size_sqm   numeric,
   rooms      numeric,
   year_built integer,
-  condition  text,          -- z.B. "neuwertig", "renovierungsbedürftig"
-  notes      text,          -- Freitext-Notizen fürs Prompt
+  condition  text,          -- e.g. "neuwertig", "renovierungsbedürftig"
+  notes      text,          -- free-text notes for the prompt
   created_at timestamptz not null default now()
 );
 
@@ -70,12 +70,12 @@ create policy "properties_all_own" on public.properties
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- ---------------------------------------------------------------------------
--- documents: generierte Exposé-Texte (versioniert)
+-- documents: generated exposé texts (versioned)
 -- ---------------------------------------------------------------------------
--- content ist JSONB mit definierten Abschnitten:
+-- content is JSONB with defined sections:
 --   { "lage": "...", "ausstattung": "...", "zustand": "...", "fazit": "..." }
--- Strukturierte Abschnitte statt Textblob = einzelne Regeneration möglich
--- und verlässlich weiterverarbeitbar.
+-- Structured sections instead of a text blob = individual regeneration is
+-- possible and the result stays reliably processable.
 create table if not exists public.documents (
   id             uuid primary key default gen_random_uuid(),
   property_id    uuid not null references public.properties (id) on delete cascade,
@@ -98,11 +98,11 @@ create policy "documents_all_own" on public.documents
 -- ---------------------------------------------------------------------------
 -- Grants
 -- ---------------------------------------------------------------------------
--- RLS steuert, WELCHE Zeilen sichtbar sind — die Rolle braucht zusätzlich die
--- Tabellen-Grants, um überhaupt zugreifen zu dürfen. Eingeloggte Nutzer laufen
--- über die Rolle `authenticated`; `anon` bleibt außen vor (RLS + kein Grant).
--- Normalerweise setzt Supabase diese Grants automatisch — hier explizit,
--- damit das Schema eigenständig reproduzierbar ist.
+-- RLS controls WHICH rows are visible — the role additionally needs the table
+-- grants to be able to access them at all. Logged-in users run under the
+-- `authenticated` role; `anon` stays out (RLS + no grant). Supabase normally
+-- sets these grants automatically — spelled out here so the schema is
+-- reproducible on its own.
 grant usage on schema public to authenticated;
 grant select, insert, update, delete
   on public.profiles, public.properties, public.documents

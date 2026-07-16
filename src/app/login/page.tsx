@@ -7,7 +7,7 @@ import DemoButton from "@/components/DemoButton";
 
 const AUTH_TIMEOUT_MS = 12_000;
 
-// Übersetzt die kryptischen Supabase-Fehlercodes in verständliche Hinweise.
+// Translates the cryptic Supabase error codes into readable hints.
 function describeAuthError(code: string, description: string | null): string {
   if (code === "otp_expired") {
     return "Der E-Mail-Link war abgelaufen oder wurde schon geöffnet. Manche Postfächer (z. B. Outlook) klicken Links beim Scannen automatisch an und verbrauchen den Einmal-Link. Melde dich einfach oben mit E-Mail und Passwort an.";
@@ -31,9 +31,9 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Fehler von fehlgeschlagenen Magic-/Bestätigungs-Links anzeigen. Unsere
-  // Redirects (Root + Callback) hängen die Details als ?error_code= an — hier
-  // konsistent für Server- und Client-Render, daher als Startwert der States.
+  // Show errors from failed magic/confirmation links. Our redirects (root +
+  // callback) append the details as ?error_code= — kept consistent between
+  // server and client render, hence used as the initial state values.
   const linkErrorCode = searchParams.get("error_code");
   const linkError = linkErrorCode
     ? describeAuthError(linkErrorCode, searchParams.get("error_description"))

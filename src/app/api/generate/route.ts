@@ -3,14 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { anthropic, buildSectionPrompt, MODEL } from "@/lib/anthropic";
 import { SECTION_KEYS, type PropertyInput, type SectionKey } from "@/lib/types";
 
-// Generiert EINEN Exposé-Abschnitt und streamt den Text tokenweise zurück.
-// Der Client ruft die Route für jeden Abschnitt (parallel) auf — dieselbe
-// Route deckt Erst-Generierung und "Abschnitt neu generieren" ab.
+// Generates ONE exposé section and streams the text back token by token.
+// The client calls the route for each section (in parallel) — the same route
+// covers both first generation and "regenerate section".
 //
-// Der Anthropic-API-Key wird ausschließlich hier serverseitig verwendet und
-// erreicht den Browser nie.
+// The Anthropic API key is used exclusively here on the server and never
+// reaches the browser.
 export async function POST(request: NextRequest) {
-  // 1) Auth erzwingen — nur eingeloggte Nutzer dürfen generieren.
+  // 1) Enforce auth — only logged-in users may generate.
   const supabase = await createClient();
   const {
     data: { user },
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
   }
 
-  // 2) Eingaben validieren.
+  // 2) Validate inputs.
   let body: { property?: PropertyInput; section?: string };
   try {
     body = await request.json();
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     section,
   );
 
-  // 3) Antwort streamen. text/plain, damit der Client Tokens direkt anzeigt.
+  // 3) Stream the response. text/plain so the client can show tokens directly.
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
         await modelStream.finalMessage();
         controller.close();
       } catch (err) {
-        console.error("Generierung fehlgeschlagen:", err);
+        console.error("Generation failed:", err);
         controller.error(err);
       }
     },

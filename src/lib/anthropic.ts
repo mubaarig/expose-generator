@@ -2,18 +2,18 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { PropertyInput, SectionKey } from "./types";
 import { SECTIONS } from "./types";
 
-// Modell serverseitig konfigurierbar; Default = leistungsstärkstes Opus.
+// Model is server-side configurable; default = most capable Opus.
 export const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-opus-4-8";
 
-// Versioniert, damit gespeicherte Dokumente nachvollziehbar bleiben, wenn
-// wir das Prompt weiterentwickeln (steht in documents.prompt_version).
+// Versioned so stored documents stay traceable as we evolve the prompt
+// (recorded in documents.prompt_version).
 export const PROMPT_VERSION = "expose-v2";
 
 export const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// System-Prompt: definiert Rolle + harte Ausgabe-Regeln. Das ist der Kern
-// der "verlässlicher Output"-Story — der Vertrag wird an einer Stelle
-// zentral definiert und für jeden Abschnitt wiederverwendet.
+// System prompt: defines role + hard output rules. This is the core of the
+// "reliable output" story — the contract is defined centrally in one place
+// and reused for every section.
 const SYSTEM_PROMPT = `Du bist ein erfahrener Immobilienmakler und textest professionelle Wohnungs-Exposés auf Deutsch.
 
 Regeln:

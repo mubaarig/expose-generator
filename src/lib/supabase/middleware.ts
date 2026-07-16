@@ -2,8 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseEnv } from "@/lib/env";
 
-// Hält die Auth-Session frisch (Token-Refresh) und schützt App-Routen.
-// Wird aus src/proxy.ts bei jedem passenden Request aufgerufen.
+// Keeps the auth session fresh (token refresh) and protects app routes.
+// Called from src/proxy.ts on every matching request.
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
   const env = getSupabaseEnv();
@@ -32,8 +32,8 @@ export async function updateSession(request: NextRequest) {
       },
     });
 
-    // WICHTIG: getUser() unmittelbar nach dem Client-Erstellen aufrufen —
-    // sonst können User zufällig ausgeloggt werden (Supabase-SSR-Empfehlung).
+    // IMPORTANT: call getUser() immediately after creating the client —
+    // otherwise users can be logged out at random (Supabase SSR recommendation).
     const {
       data: { user: authUser },
     } = await supabase.auth.getUser();
