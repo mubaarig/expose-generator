@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import DemoButton from "@/components/DemoButton";
+import Brand from "@/components/Brand";
 
 const AUTH_TIMEOUT_MS = 12_000;
 
@@ -139,66 +140,91 @@ function LoginForm() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Anmelden</h1>
-      <p className="mt-2 text-sm text-zinc-500">
-        Melde dich mit E-Mail und Passwort an — oder lege in einem Schritt einen
-        Account an.
-      </p>
+    <main className="grid min-h-dvh bg-canvas lg:grid-cols-[0.92fr_1.08fr]">
+      <section className="hidden border-r border-line bg-surface-muted/60 p-12 lg:flex lg:flex-col lg:justify-between">
+        <Brand />
+        <div className="max-w-lg">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Professionelle Textarbeit</p>
+          <h1 className="font-editorial mt-5 text-6xl leading-[0.98] tracking-[-0.045em]">
+            Aus Angaben wird ein prüfbarer Entwurf.
+          </h1>
+          <p className="mt-6 max-w-md text-base leading-7 text-ink-soft">
+            Ein fokussierter Arbeitsbereich für strukturierte Immobilienexposés — vom Objekt bis zum exportierbaren Text.
+          </p>
+        </div>
+        <p className="text-xs leading-5 text-ink-faint">
+          KI unterstützt bei der Formulierung.<br />Die fachliche Freigabe bleibt bei Ihnen.
+        </p>
+      </section>
+
+      <section className="flex min-h-dvh items-center justify-center px-5 py-12 sm:px-8">
+        <div className="w-full max-w-md">
+          <div className="mb-14 lg:hidden"><Brand /></div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Zugang</p>
+          <h2 className="font-editorial mt-3 text-4xl tracking-[-0.03em]">Willkommen zurück.</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-soft">
+            Mit E-Mail und Passwort anmelden oder den geschützten Demo-Zugang verwenden.
+          </p>
 
       {status === "sent" ? (
-        <div className="mt-8 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+        <div className="mt-8 border border-success/20 bg-success-soft p-5 text-sm leading-6 text-success">
           Link ist unterwegs. Schau in dein Postfach für{" "}
           <span className="font-medium">{email}</span>.
         </div>
       ) : (
-        <div className="mt-8 flex flex-col gap-5">
+        <div className="mt-8 flex flex-col gap-6">
           <div className="flex flex-col gap-3">
             <DemoButton
               className="[&>button]:w-full"
               label="Demo ansehen — ohne Anmeldung"
             />
-            <div className="flex items-center gap-3 text-xs text-zinc-400">
-              <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+            <div className="flex items-center gap-3 text-xs text-ink-faint">
+              <span className="h-px flex-1 bg-line" />
               oder
-              <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+              <span className="h-px flex-1 bg-line" />
             </div>
           </div>
 
-          <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-3">
+          <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-4">
+            <label className="grid gap-1.5 text-xs font-semibold text-ink-soft">
+              E-Mail-Adresse
             <input
               type="email"
               required
               autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="du@beispiel.de"
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-100"
+              placeholder="name@unternehmen.at"
+              className="h-11 border border-line-strong bg-surface px-3 text-sm text-ink transition-colors focus:border-accent"
             />
-            <div className="relative">
+            </label>
+            <label className="grid gap-1.5 text-xs font-semibold text-ink-soft">
+              Passwort
+              <span className="relative">
               <input
                 type={showPassword ? "text" : "password"}
                 required
                 minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Passwort (mind. 6 Zeichen)"
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 pr-16 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-100"
+                placeholder="Mindestens 6 Zeichen"
+                className="h-11 w-full border border-line-strong bg-surface px-3 pr-20 text-sm font-normal text-ink transition-colors focus:border-accent"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "Passwort verbergen" : "Passwort anzeigen"}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-xs font-semibold text-ink-faint hover:text-ink"
               >
                 {showPassword ? "Verbergen" : "Anzeigen"}
               </button>
-            </div>
+              </span>
+            </label>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="submit"
                 disabled={status === "sending"}
-                className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+                className="h-11 bg-ink px-3 text-sm font-semibold text-surface transition-colors hover:bg-accent-dark disabled:opacity-50"
               >
                 {status === "sending" ? "…" : "Einloggen"}
               </button>
@@ -206,14 +232,14 @@ function LoginForm() {
                 type="button"
                 disabled={status === "sending"}
                 onClick={() => submitPassword("signup")}
-                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                className="h-11 border border-line-strong px-3 text-sm font-semibold text-ink transition-colors hover:bg-surface disabled:opacity-50"
               >
                 Account anlegen
               </button>
             </div>
           </form>
 
-          <div className="border-t border-zinc-200 pt-5 dark:border-zinc-800">
+          <div className="border-t border-line pt-5">
             <button
               type="button"
               onClick={() => {
@@ -221,7 +247,7 @@ function LoginForm() {
                 setError(null);
                 setShowMagicLink((v) => !v);
               }}
-              className="text-sm font-medium text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-zinc-100"
+              className="text-sm font-semibold text-ink-soft hover:text-ink"
             >
               {showMagicLink
                 ? "Magic Link ausblenden"
@@ -230,7 +256,7 @@ function LoginForm() {
 
             {showMagicLink && (
               <div className="mt-4 flex flex-col gap-2">
-                <p className="text-xs leading-relaxed text-zinc-500">
+                <p className="text-xs leading-relaxed text-ink-faint">
                   Wir senden einen Anmeldelink an die oben eingegebene Adresse.
                   Hinweis: Manche Postfächer (z. B. Outlook) verbrauchen den
                   Einmal-Link beim Scannen — der Passwort-Login oben ist
@@ -240,7 +266,7 @@ function LoginForm() {
                   type="button"
                   disabled={status === "sending"}
                   onClick={sendMagicLink}
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                  className="h-11 border border-line-strong px-3 text-sm font-semibold text-ink transition-colors hover:bg-surface disabled:opacity-50"
                 >
                   {status === "sending" ? "Wird gesendet…" : "Magic Link senden"}
                 </button>
@@ -249,10 +275,12 @@ function LoginForm() {
           </div>
 
           {error && (
-            <p className="text-sm leading-relaxed text-red-600">{error}</p>
+            <p role="alert" className="border border-error/20 bg-error-soft p-4 text-sm leading-6 text-error">{error}</p>
           )}
         </div>
-      )}
+          )}
+        </div>
+      </section>
     </main>
   );
 }

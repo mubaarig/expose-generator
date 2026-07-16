@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Exposé-Assistent",
+  title: "Exposé Werkstatt",
   description:
-    "Aus Immobilien-Eckdaten professionelle Exposé-Texte generieren — Next.js, Supabase & Claude.",
+    "Professionelle Immobilienexposés strukturiert erstellen, prüfen und exportieren.",
 };
 
 export default function RootLayout({
@@ -28,7 +28,7 @@ export default function RootLayout({
       lang="de"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+      <body className="flex min-h-full flex-col bg-canvas text-ink">
         {children}
       </body>
     </html>

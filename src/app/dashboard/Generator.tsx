@@ -2,18 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import DocumentPreview, { type PreviewSectionState } from "@/components/DocumentPreview";
+import FormSection from "@/components/FormSection";
+import WorkflowStepper from "@/components/WorkflowStepper";
 import { createClient } from "@/lib/supabase/client";
-import {
-  SECTIONS,
-  SECTION_KEYS,
-  type PropertyInput,
-  type SectionKey,
-} from "@/lib/types";
-
-type SectionState = {
-  text: string;
-  status: "empty" | "streaming" | "done" | "error";
-};
+import { SECTION_KEYS, SECTIONS, type PropertyInput, type SectionKey } from "@/lib/types";
 
 const emptyForm: PropertyInput = {
   address: "",
@@ -25,117 +18,105 @@ const emptyForm: PropertyInput = {
 };
 
 const demoForm: PropertyInput = {
-  address: "Marzstraße 109/8, 1150 Wien",
-  size_sqm: 43,
-  rooms: 1,
-  year_built: 1918,
-  condition: "renoviert",
-  notes: "Süd-Balkon, EBK 2021, U3-Nähe, ruhige Seitenstraße",
+  address: "Kirchengasse 18/7, 1070 Wien",
+  size_sqm: 68,
+  rooms: 3,
+  year_built: 1904,
+  condition: "gepflegt",
+  notes: "Ruhige Innenhoflage, Fischgrätparkett, Flügeltüren, separate Küche, U3-Nähe, kleiner Balkon zum Innenhof",
 };
 
-const CONDITION_OPTIONS = [
-  "neuwertig",
-  "renoviert",
-  "gepflegt",
-  "teilsaniert",
-  "renovierungsbedürftig",
-] as const;
+const CONDITION_OPTIONS = ["neuwertig", "renoviert", "gepflegt", "teilsaniert", "renovierungsbedürftig"] as const;
 
-const emptySections = (): Record<SectionKey, SectionState> =>
-  Object.fromEntries(
-    SECTION_KEYS.map((k) => [k, { text: "", status: "empty" }]),
-  ) as Record<SectionKey, SectionState>;
+const emptySections = (): Record<SectionKey, PreviewSectionState> =>
+  Object.fromEntries(SECTION_KEYS.map((key) => [key, { text: "", status: "empty" }])) as Record<SectionKey, PreviewSectionState>;
 
-export default function Generator() {
+export default function Generator({ model }: { model: string }) {
   const router = useRouter();
-  // Prefilled example: visitors see filled-in fields right away and can click
-  // "Exposé generieren" immediately.
-  const [form, setForm] = useState<PropertyInput>(demoForm);
-  const [sections, setSections] =
-    useState<Record<SectionKey, SectionState>>(emptySections);
+  const [form, setForm] = useState<PropertyInput>(emptyForm);
+  const [sections, setSections] = useState<Record<SectionKey, PreviewSectionState>>(emptySections);
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [addressError, setAddressError] = useState<string | null>(null);
 
-  function num(v: string): number | null {
-    if (v.trim() === "") return null;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
+  const hasContent = SECTION_KEYS.some((key) => sections[key].status === "done");
+  const hasStarted = SECTION_KEYS.some((key) => sections[key].status !== "empty");
+  const completedCount = SECTION_KEYS.filter((key) => sections[key].status === "done").length;
+  const activeStep = busy ? 2 : hasContent ? 3 : form.notes || form.condition ? 1 : 0;
+
+  function num(value: string): number | null {
+    if (value.trim() === "") return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
-  // Streams a section token by token into its card.
   async function generateSection(section: SectionKey) {
-    setSections((s) => ({ ...s, [section]: { text: "", status: "streaming" } }));
-
+    setSections((current) => ({ ...current, [section]: { text: "", status: "streaming" } }));
     try {
-      const res = await fetch("/api/generate", {
+      const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ property: form, section }),
       });
 
-      if (!res.ok || !res.body) {
-        // Error responses (e.g. 429 quota/capacity) are JSON ({ error }); show
-        // that message instead of rendering raw JSON in the section card.
-        const raw = await res.text().catch(() => "");
-        let msg = raw;
-        try {
-          msg = (JSON.parse(raw) as { error?: string })?.error ?? raw;
-        } catch {
-          // not JSON — keep the raw text.
-        }
-        throw new Error(msg || `Fehler ${res.status}`);
+      if (!response.ok || !response.body) {
+        const raw = await response.text().catch(() => "");
+        let message = raw;
+        try { message = (JSON.parse(raw) as { error?: string })?.error ?? raw; } catch { /* keep raw response */ }
+        throw new Error(message || `Generierung fehlgeschlagen (${response.status})`);
       }
 
-      const reader = res.body.getReader();
+      const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let acc = "";
+      let text = "";
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        acc += decoder.decode(value, { stream: true });
-        setSections((s) => ({
-          ...s,
-          [section]: { text: acc, status: "streaming" },
-        }));
+        text += decoder.decode(value, { stream: true });
+        setSections((current) => ({ ...current, [section]: { text, status: "streaming" } }));
       }
-      setSections((s) => ({
-        ...s,
-        [section]: { text: acc, status: "done" },
-      }));
-    } catch (err) {
-      setSections((s) => ({
-        ...s,
-        [section]: {
-          text: err instanceof Error ? err.message : "Fehler",
-          status: "error",
-        },
+      setSections((current) => ({ ...current, [section]: { text, status: "done" } }));
+    } catch (error) {
+      setSections((current) => ({
+        ...current,
+        [section]: { text: error instanceof Error ? error.message : "Der Abschnitt konnte nicht erstellt werden.", status: "error" },
       }));
     }
   }
 
-  // Generate all four sections in parallel.
   async function generateAll() {
-    if (!form.address.trim()) return;
+    if (!form.address.trim()) {
+      setAddressError("Bitte geben Sie eine Objektadresse ein.");
+      return;
+    }
+    setAddressError(null);
     setBusy(true);
     setSaveMsg(null);
     await Promise.all(SECTION_KEYS.map(generateSection));
     setBusy(false);
   }
 
-  const hasContent = SECTION_KEYS.some((k) => sections[k].status === "done");
-
   function resetForm() {
+    if (busy || saving) return;
     setForm(emptyForm);
     setSections(emptySections());
     setSaveMsg(null);
+    setAddressError(null);
   }
 
-  // Finished sections as cleanly formatted text.
+  function useDemoData() {
+    if (busy || saving) return;
+    setForm(demoForm);
+    setSections(emptySections());
+    setSaveMsg(null);
+    setAddressError(null);
+  }
+
   function exposeText(): string {
-    const body = SECTIONS.filter((s) => sections[s.key].status === "done")
-      .map((s) => `${s.title.toUpperCase()}\n${sections[s.key].text}`)
+    const body = SECTIONS.filter((section) => sections[section.key].status === "done")
+      .map((section) => `${section.title.toUpperCase()}\n${sections[section.key].text}`)
       .join("\n\n");
     return `EXPOSÉ – ${form.address}\n\n${body}`;
   }
@@ -146,295 +127,144 @@ export default function Generator() {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      setSaveMsg("Fehler: Kopieren nicht möglich.");
+      setSaveMsg("Fehler: Der Text konnte nicht kopiert werden.");
     }
   }
 
-  // Print view in a new window → browser "Save as PDF".
   function exportPdf() {
     const win = window.open("", "_blank", "width=800,height=1000");
-    if (!win) return;
-    const esc = (s: string) =>
-      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const blocks = SECTIONS.filter((s) => sections[s.key].status === "done")
-      .map(
-        (s) =>
-          `<h2>${esc(s.title)}</h2><p>${esc(sections[s.key].text).replace(/\n/g, "<br>")}</p>`,
-      )
+    if (!win) {
+      setSaveMsg("Fehler: Das Druckfenster wurde vom Browser blockiert.");
+      return;
+    }
+    const esc = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const blocks = SECTIONS.filter((section) => sections[section.key].status === "done")
+      .map((section, index) => `<section><div class="eyebrow">${String(index + 1).padStart(2, "0")} · ${esc(section.title)}</div><p>${esc(sections[section.key].text).replace(/\n/g, "<br>")}</p></section>`)
       .join("");
-    win.document.write(
-      `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Exposé – ${esc(
-        form.address,
-      )}</title><style>body{font-family:system-ui,-apple-system,sans-serif;max-width:640px;margin:48px auto;padding:0 24px;color:#18181b;line-height:1.6}h1{font-size:22px;margin:0 0 4px}.meta{color:#71717a;font-size:13px;margin:0 0 28px}h2{font-size:15px;margin:24px 0 6px;text-transform:uppercase;letter-spacing:.04em;color:#3f3f46}p{margin:0}</style></head><body><h1>Exposé</h1><p class="meta">${esc(
-        form.address,
-      )}</p>${blocks}</body></html>`,
-    );
+    win.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Exposé – ${esc(form.address)}</title><style>@page{margin:20mm}body{font-family:Arial,sans-serif;max-width:680px;margin:40px auto;color:#1d211d;line-height:1.7}header{border-bottom:1px solid #1d211d;padding-bottom:24px;margin-bottom:34px}h1{font-family:Georgia,serif;font-size:34px;line-height:1.1;margin:10px 0}.kicker,.eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:#a84f2c;font-weight:700}.meta{color:#777;font-size:12px}section{margin:0 0 28px}p{font-size:14px;margin:8px 0 0}footer{border-top:1px solid #ddd;margin-top:40px;padding-top:12px;font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:#888}</style></head><body><header><div class="kicker">Immobilienexposé</div><h1>${esc(form.address)}</h1><div class="meta">${form.size_sqm ?? "—"} m² · ${form.rooms ?? "—"} Zimmer · Baujahr ${form.year_built ?? "—"}</div></header>${blocks}<footer>KI-Entwurf · fachlich zu prüfen</footer></body></html>`);
     win.document.close();
     win.focus();
     win.print();
   }
 
-  // Save property + document to Supabase (RLS enforces ownership).
   async function save() {
     if (saving) return;
     setSaving(true);
     setSaveMsg(null);
-
     try {
       const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        setSaveMsg("Nicht eingeloggt.");
-        return;
-      }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setSaveMsg("Fehler: Sie sind nicht eingeloggt."); return; }
 
-      const { data: property, error: pErr } = await supabase
-        .from("properties")
-        .insert({ ...form, user_id: user.id })
-        .select()
-        .single();
+      const { data: property, error: propertyError } = await supabase
+        .from("properties").insert({ ...form, user_id: user.id }).select().single();
+      if (propertyError || !property) { setSaveMsg(`Fehler beim Speichern: ${propertyError?.message}`); return; }
 
-      if (pErr || !property) {
-        setSaveMsg(`Fehler beim Speichern: ${pErr?.message}`);
-        return;
-      }
-
-      const content = Object.fromEntries(
-        SECTION_KEYS.filter((k) => sections[k].status === "done").map((k) => [
-          k,
-          sections[k].text,
-        ]),
-      );
-
-      const { error: dErr } = await supabase.from("documents").insert({
+      const content = Object.fromEntries(SECTION_KEYS.filter((key) => sections[key].status === "done").map((key) => [key, sections[key].text]));
+      const { error: documentError } = await supabase.from("documents").insert({
         property_id: property.id,
         user_id: user.id,
         content,
-        model: "claude-opus-4-8",
+        model,
         prompt_version: "expose-v2",
       });
-
-      if (dErr) {
-        setSaveMsg(`Fehler beim Speichern: ${dErr.message}`);
-        return;
-      }
-
-      setSaveMsg("Exposé wurde gespeichert.");
+      if (documentError) { setSaveMsg(`Fehler beim Speichern: ${documentError.message}`); return; }
+      setSaveMsg("Exposé gespeichert. Der Entwurf wurde dem Archiv hinzugefügt.");
       router.refresh();
-    } catch (err) {
-      setSaveMsg(
-        err instanceof Error ? `Fehler beim Speichern: ${err.message}` : "Fehler beim Speichern.",
-      );
+    } catch (error) {
+      setSaveMsg(error instanceof Error ? `Fehler beim Speichern: ${error.message}` : "Fehler beim Speichern.");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[22rem_1fr]">
-      {/* Input form */}
-      <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            Eckdaten
-          </h2>
-          <button
-            type="button"
-            onClick={resetForm}
-            disabled={busy || saving}
-            className="rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-          >
-            Felder leeren
-          </button>
-        </div>
-        <div className="mt-4 flex flex-col gap-3">
-          <Field label="Adresse *">
-            <input
-              className={inputCls}
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-              placeholder="Marzstraße 109/8, 1150 Wien"
-            />
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Wohnfläche (m²)">
-              <input
-                className={inputCls}
-                inputMode="decimal"
-                value={form.size_sqm ?? ""}
-                onChange={(e) =>
-                  setForm({ ...form, size_sqm: num(e.target.value) })
-                }
-              />
-            </Field>
-            <Field label="Zimmer">
-              <input
-                className={inputCls}
-                inputMode="decimal"
-                value={form.rooms ?? ""}
-                onChange={(e) =>
-                  setForm({ ...form, rooms: num(e.target.value) })
-                }
-              />
-            </Field>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Baujahr">
-              <input
-                className={inputCls}
-                inputMode="numeric"
-                value={form.year_built ?? ""}
-                onChange={(e) =>
-                  setForm({ ...form, year_built: num(e.target.value) })
-                }
-              />
-            </Field>
-            <Field label="Zustand">
-              <select
-                className={inputCls}
-                value={form.condition ?? ""}
-                onChange={(e) =>
-                  setForm({ ...form, condition: e.target.value })
-                }
-              >
-                <option value="">Bitte wählen</option>
-                {CONDITION_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          <Field label="Notizen">
-            <textarea
-              className={`${inputCls} min-h-20 resize-y`}
-              value={form.notes ?? ""}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder="Süd-Balkon, EBK 2021, U3-Nähe, ruhige Seitenstraße…"
-            />
-          </Field>
+    <div>
+      <WorkflowStepper active={activeStep} />
 
-          <button
-            onClick={generateAll}
-            disabled={busy || !form.address.trim()}
-            className="mt-1 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-          >
-            {busy ? "Generiere…" : "Exposé generieren"}
-          </button>
+      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(340px,0.78fr)_minmax(520px,1.22fr)] xl:gap-9">
+        <section className="border border-line bg-surface" aria-labelledby="object-form-title">
+          <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-5 sm:px-6">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">Objektdaten</p>
+              <h2 id="object-form-title" className="mt-1 text-base font-semibold">Grundlage für den Entwurf</h2>
+            </div>
+            <button type="button" onClick={useDemoData} disabled={busy || saving} className="text-xs font-semibold text-accent transition-colors hover:text-accent-dark disabled:opacity-50">
+              Beispieldaten verwenden
+            </button>
+          </header>
 
-          {hasContent && (
-            <button
-              onClick={save}
-              disabled={busy || saving}
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
-            >
-              {saving ? "Speichere…" : "Exposé speichern"}
-            </button>
-          )}
-          {saveMsg && (
-            <p
-              className={`text-sm ${
-                saveMsg.startsWith("Fehler") || saveMsg === "Nicht eingeloggt."
-                  ? "text-red-600"
-                  : "text-emerald-600"
-              }`}
-            >
-              {saveMsg}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Sections */}
-      <div className="flex flex-col gap-4">
-        {hasContent && (
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={copyAll}
-              disabled={busy}
-              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-            >
-              {copied ? "Kopiert ✓" : "Text kopieren"}
-            </button>
-            <button
-              type="button"
-              onClick={exportPdf}
-              disabled={busy}
-              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-            >
-              Als PDF
-            </button>
-          </div>
-        )}
-        {SECTIONS.map(({ key, title, hint }) => {
-          const st = sections[key];
-          return (
-            <section
-              key={key}
-              className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                    {title}
-                  </h3>
-                  <p className="text-xs text-zinc-400">{hint}</p>
+          <div className="px-5 py-6 sm:px-6">
+            <FormSection number="01" title="Objektidentität" description="Adresse und zentrale Eckdaten des Objekts.">
+              <div className="grid gap-4">
+                <Field label="Objektadresse" required error={addressError}>
+                  <input className={inputCls} autoComplete="street-address" value={form.address} onChange={(event) => { setForm({ ...form, address: event.target.value }); if (event.target.value.trim()) setAddressError(null); }} placeholder="Straße, Hausnummer, PLZ, Ort" />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Wohnfläche" suffix="m²"><input className={`${inputCls} pr-10 tabular-nums`} inputMode="decimal" value={form.size_sqm ?? ""} onChange={(event) => setForm({ ...form, size_sqm: num(event.target.value) })} /></Field>
+                  <Field label="Zimmer"><input className={`${inputCls} tabular-nums`} inputMode="decimal" value={form.rooms ?? ""} onChange={(event) => setForm({ ...form, rooms: num(event.target.value) })} /></Field>
                 </div>
-                {st.status !== "empty" && (
-                  <button
-                    onClick={() => generateSection(key)}
-                    disabled={st.status === "streaming"}
-                    className="text-xs font-medium text-zinc-500 hover:text-zinc-900 disabled:opacity-40 dark:hover:text-zinc-100"
-                  >
-                    {st.status === "streaming" ? "…" : "↻ Neu"}
-                  </button>
-                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Baujahr"><input className={`${inputCls} tabular-nums`} inputMode="numeric" value={form.year_built ?? ""} onChange={(event) => setForm({ ...form, year_built: num(event.target.value) })} /></Field>
+                  <Field label="Zustand"><select className={inputCls} value={form.condition ?? ""} onChange={(event) => setForm({ ...form, condition: event.target.value })}><option value="">Bitte wählen</option>{CONDITION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></Field>
+                </div>
               </div>
-              <div className="mt-3 min-h-6 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
-                {st.status === "empty" ? (
-                  <span className="text-zinc-400">Noch nicht generiert.</span>
-                ) : st.status === "error" ? (
-                  <span className="text-red-600">{st.text}</span>
-                ) : st.status === "streaming" && !st.text ? (
-                  <div className="flex items-center gap-2 text-zinc-500">
-                    <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-zinc-400" />
-                    <span>Generiere…</span>
-                  </div>
-                ) : (
-                  <p className="whitespace-pre-wrap">
-                    {st.text}
-                    {st.status === "streaming" && (
-                      <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-zinc-400 align-middle" />
-                    )}
-                  </p>
-                )}
+            </FormSection>
+
+            <FormSection number="02" title="Angaben & Besonderheiten" description="Nur belegbare Merkmale angeben; fehlende Fakten werden nicht ergänzt.">
+              <Field label="Objektnotizen" hint={`${form.notes?.length ?? 0}/1.000 Zeichen`}>
+                <textarea className={`${inputCls} min-h-24 resize-y py-2.5`} maxLength={1000} value={form.notes ?? ""} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Grundriss, Ausstattung, Lage, Modernisierungen und besondere Merkmale …" />
+              </Field>
+            </FormSection>
+
+            <div className="border-t border-line pt-6">
+              <button type="button" onClick={generateAll} disabled={busy || !form.address.trim()} className="flex min-h-12 w-full items-center justify-between bg-ink px-4 text-sm font-semibold text-surface transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-45">
+                <span>{busy ? "Exposé wird erstellt …" : hasStarted ? "Gesamten Entwurf neu erstellen" : "Exposé-Entwurf generieren"}</span>
+                <span aria-hidden>{busy ? `${completedCount}/4` : "→"}</span>
+              </button>
+
+              {busy && (
+                <div className="mt-4" aria-live="polite">
+                  <div className="h-1 overflow-hidden bg-surface-muted"><span className="block h-full bg-accent transition-all duration-200" style={{ width: `${Math.max(8, completedCount * 25)}%` }} /></div>
+                  <p className="mt-2 text-xs text-ink-soft">Abschnitte werden parallel formuliert und erscheinen direkt in der Vorschau.</p>
+                </div>
+              )}
+
+              {hasContent && (
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <button type="button" onClick={save} disabled={busy || saving} className="border border-line-strong px-2 py-2.5 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted disabled:opacity-50">{saving ? "Speichert …" : "Speichern"}</button>
+                  <button type="button" onClick={copyAll} disabled={busy} className="border border-line-strong px-2 py-2.5 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted disabled:opacity-50">{copied ? "Kopiert ✓" : "Kopieren"}</button>
+                  <button type="button" onClick={exportPdf} disabled={busy} className="border border-line-strong px-2 py-2.5 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted disabled:opacity-50">Als PDF</button>
+                </div>
+              )}
+
+              <div className="mt-4 flex items-center justify-between gap-4">
+                <p className="text-[11px] leading-5 text-ink-faint">KI-Entwurf · fachliche Prüfung erforderlich</p>
+                <button type="button" onClick={resetForm} disabled={busy || saving} className="shrink-0 text-[11px] font-semibold text-ink-faint underline decoration-line-strong underline-offset-4 hover:text-ink disabled:opacity-40">Felder leeren</button>
               </div>
-            </section>
-          );
-        })}
+
+              {saveMsg && <p role="status" className={`mt-4 border px-3 py-3 text-xs leading-5 ${saveMsg.startsWith("Fehler") ? "border-error/20 bg-error-soft text-error" : "border-success/20 bg-success-soft text-success"}`}>{saveMsg}</p>}
+            </div>
+          </div>
+        </section>
+
+        <DocumentPreview property={form} sections={sections} busy={busy} onRegenerate={generateSection} />
       </div>
     </div>
   );
 }
 
-const inputCls =
-  "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:focus:border-zinc-100";
+const inputCls = "h-11 w-full border border-line-strong bg-surface px-3 text-sm text-ink transition-colors placeholder:text-ink-faint focus:border-accent";
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Field({ label, required, error, suffix, hint, children }: { label: string; required?: boolean; error?: string | null; suffix?: string; hint?: string; children: React.ReactNode }) {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-zinc-500">{label}</span>
-      {children}
+    <label className="grid gap-1.5">
+      <span className="flex items-center justify-between gap-3 text-xs font-semibold text-ink-soft">
+        <span>{label}{required && <span className="ml-1 text-accent" aria-hidden>*</span>}</span>
+        {hint && <span className="font-normal tabular-nums text-ink-faint">{hint}</span>}
+      </span>
+      <span className="relative block">{children}{suffix && <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-ink-faint">{suffix}</span>}</span>
+      {error && <span className="text-xs text-error" role="alert">{error}</span>}
     </label>
   );
 }

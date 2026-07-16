@@ -42,8 +42,8 @@ export default function DemoButton({
 
   const styles =
     variant === "primary"
-      ? "bg-zinc-900 text-white hover:opacity-90 dark:bg-zinc-100 dark:text-zinc-900"
-      : "border border-zinc-300 text-zinc-900 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800";
+      ? "bg-ink text-surface hover:bg-accent-dark"
+      : "border border-line-strong text-ink hover:bg-surface";
 
   return (
     <div className={className}>
@@ -51,11 +51,11 @@ export default function DemoButton({
         type="button"
         onClick={startDemo}
         disabled={loading}
-        className={`inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium transition-opacity disabled:opacity-50 ${styles}`}
+        className={`inline-flex min-h-12 items-center justify-center px-5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${styles}`}
       >
         {loading ? "Starte Demo…" : label}
       </button>
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 max-w-md text-sm leading-6 text-error">{error}</p>}
     </div>
   );
 }
