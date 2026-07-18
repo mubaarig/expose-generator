@@ -121,28 +121,69 @@ export async function POST(request: NextRequest) {
 
   const { system, user: userPrompt } = buildSectionPrompt(property, section);
 
-  // 4) Stream the response. text/plain so the client can show tokens directly.
+  // 4) Establish the paid upstream request BEFORE returning our HTTP stream.
+  // This lets authentication, model, billing and provider rate-limit failures
+  // become normal JSON errors instead of late failures inside a 200 response.
   const encoder = new TextEncoder();
+  const bufferedDeltas: string[] = [];
+  let enqueueDelta: ((delta: string) => void) | null = null;
+  const modelStream = anthropic.messages.stream({
+    model: MODEL,
+    max_tokens: 400,
+    temperature: 0.5,
+    system,
+    messages: [{ role: "user", content: userPrompt }],
+  });
 
-  // If the client disconnects (tab closed, navigation, cancelled fetch), abort
-  // the Anthropic stream instead of paying for tokens nobody is reading.
-  let modelStream: ReturnType<typeof anthropic.messages.stream> | null = null;
-  request.signal.addEventListener("abort", () => modelStream?.abort());
+  modelStream.on("text", (delta: string) => {
+    if (enqueueDelta) enqueueDelta(delta);
+    else bufferedDeltas.push(delta);
+  });
+
+  request.signal.addEventListener("abort", () => modelStream.abort());
+
+  try {
+    await modelStream.withResponse();
+  } catch (err) {
+    modelStream.abort();
+    const status =
+      typeof err === "object" && err !== null && "status" in err
+        ? Number((err as { status?: unknown }).status)
+        : 0;
+    console.error("Anthropic connection failed:", err);
+
+    if (status === 401 || status === 403) {
+      return NextResponse.json(
+        { error: "Der KI-Dienst ist in dieser Umgebung nicht korrekt konfiguriert." },
+        { status: 503 },
+      );
+    }
+    if (status === 404) {
+      return NextResponse.json(
+        { error: "Das konfigurierte KI-Modell ist derzeit nicht verfügbar." },
+        { status: 503 },
+      );
+    }
+    if (status === 429) {
+      return NextResponse.json(
+        { error: "Der KI-Dienst ist gerade ausgelastet. Bitte kurz warten und erneut versuchen." },
+        { status: 429 },
+      );
+    }
+    return NextResponse.json(
+      { error: "Der KI-Dienst ist gerade nicht erreichbar. Bitte erneut versuchen." },
+      { status: 502 },
+    );
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        modelStream = anthropic.messages.stream({
-          model: MODEL,
-          max_tokens: 400,
-          temperature: 0.5,
-          system,
-          messages: [{ role: "user", content: userPrompt }],
-        });
-
-        modelStream.on("text", (delta: string) => {
+        enqueueDelta = (delta: string) => {
           controller.enqueue(encoder.encode(delta));
-        });
+        };
+        bufferedDeltas.forEach(enqueueDelta);
+        bufferedDeltas.length = 0;
 
         const finalMsg = await modelStream.finalMessage();
 
@@ -186,7 +227,7 @@ export async function POST(request: NextRequest) {
       }
     },
     cancel() {
-      modelStream?.abort();
+      modelStream.abort();
     },
   });
 
